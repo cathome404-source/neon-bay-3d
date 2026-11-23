@@ -1,7 +1,7 @@
-// All tuning numbers and colours for Neon Bay 3D, in one place.
-// Exports: TUNING (nested groups for player, car, police, helicopter, weapons,
-// economy, world, missions), DISTRICTS (the four city districts), MISSION_TITLES
-// and RADIO_STATIONS.
+// The single source of balance for Neon Bay 3D: every tuning number and
+// colour lives here. Exports: TUNING (player, car, police, helicopter,
+// weapons, economy, world and mission groups), DISTRICTS (Downtown,
+// Beachfront, Docks, The Hills), MISSION_TITLES and RADIO_STATIONS.
 
 export const TUNING = {
   player: {
