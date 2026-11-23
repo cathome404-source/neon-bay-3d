@@ -8,7 +8,7 @@ Neon Bay 3D is an original open-world crime game in the spirit of GTA 6, built a
 
 The city has a downtown of towers, a beachfront, a working docks district, the Hills, and a causeway bridge with stunt ramps. Systems include third-person on-foot and driving, traffic AI, fleeing pedestrians, four weapon tiers (fists, pistol, shotgun, SMG) with a weapon wheel, a garage with engine/armor/paint upgrades, crew abilities (Vic's free repairs, Lena's cash-drop spotter), respect ranks, a 3-station synth radio, collectible cash drops, burning and exploding cars, a day-to-dusk sky, and save/load — all rendered in 3D with synthesised WebAudio sound.
 
-Polish pass: car body roll and brake lights, a speed FOV kick in the chase camera, neon signs on the downtown towers, lead-targeting police pursuit, mission barks and rival taunts, a low-health vignette, district labels on the minimap, skid and car-door sounds, a bus in traffic, and a staged chase shot with the NEON-1 helicopter in frame.
+Polish pass: body roll and brake lights on every car, a speed FOV kick in the chase camera, neon signs on the downtown towers, lead-targeting police pursuit, mission barks and rival taunts, a low-health vignette, district labels on the minimap, skid and door sounds, a bus in traffic, and a staged chase shot where the NEON-1 helicopter is in frame.
 
 ## Run it
 
