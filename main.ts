@@ -1,6 +1,6 @@
-// Build script for Neon Bay 3D: copies game/ and screenshots/ into the
-// output directory and writes output/dossier.json via the kit's buildDossier.
-// Imports: buildDossier from ./vendor/makefun-game.ts; fs, path, url from Node.
+// Dossier builder for Neon Bay 3D: gathers game/ and screenshots/ into the
+// output folder and writes dossier.json through the kit's buildDossier.
+// It pulls buildDossier from ./vendor/makefun-game.ts and fs/path/url from Node.
 
 import { buildDossier } from './vendor/makefun-game.ts';
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
