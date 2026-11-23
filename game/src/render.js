@@ -1,7 +1,7 @@
 // Neon Bay 3D — rendering: scene, golden-hour sun, chase camera with shake,
 // particles (exhaust, smoke, explosions), skid marks.
-import { COLORS } from './config.js';
-import { clamp, lerp } from './random.js';
+import { COLORS, TUNING } from './config.js';
+import { clamp, clampAngle, lerp } from './random.js';
 
 const T = window.THREE;
 const MAX_PARTICLES = 600;
@@ -67,6 +67,11 @@ export class Renderer {
     this.camYaw = 0; this.camPitch = 0.32; this.camDist = 13;
     this.trauma = 0;
     this.dusk = 0; // 0 golden hour, 1 dusk
+    // Aim override for staged shots: look ahead of the target (metres) and
+    // at a fixed height instead of at the target itself. The chase shot uses
+    // this to level the camera so the helicopter is in frame.
+    this.aimAhead = 0;
+    this.aimY = null;
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
@@ -142,17 +147,23 @@ export class Renderer {
     }
   }
   // Third-person chase camera. target: {x,z,heading}; inCar changes distance.
-  updateCamera(dt, target, inCar, yawDelta, pitchDelta) {
+  // speedNorm (0..1) widens the FOV at top speed — the sense of speed.
+  updateCamera(dt, target, inCar, yawDelta, pitchDelta, speedNorm) {
     this.camYaw += yawDelta;
     this.camPitch = clamp(this.camPitch + pitchDelta, 0.08, 0.9);
     const dist = inCar ? 15 : 12;
     const height = inCar ? 5.5 : 5;
     // Camera yaw follows the target heading loosely when driving.
     const desiredYaw = target.heading;
-    let dy = desiredYaw - this.camYaw;
-    while (dy > Math.PI) dy -= Math.PI * 2;
-    while (dy < -Math.PI) dy += Math.PI * 2;
+    const dy = clampAngle(desiredYaw - this.camYaw);
     this.camYaw += dy * Math.min(1, dt * (inCar ? 2.2 : 1.2));
+    // FOV kick: the camera opens up as the car approaches top speed.
+    const sn = clamp(speedNorm || 0, 0, 1);
+    const fov = 62 + (inCar ? sn * TUNING.fovKick : 0);
+    if (Math.abs(fov - this.camera.fov) > 0.1) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
     const cx = target.x - Math.cos(this.camYaw) * dist;
     const cz = target.z - Math.sin(this.camYaw) * dist;
     const cy = height + Math.sin(this.camPitch) * dist * 0.5;
@@ -162,7 +173,12 @@ export class Renderer {
     const shx = (Math.random() - 0.5) * sh * 1.2;
     const shy = (Math.random() - 0.5) * sh * 0.8;
     this.camera.position.set(cx + shx, cy + shy, cz);
-    this.camera.lookAt(target.x, inCar ? 2 : 1.6, target.z);
+    // Aim: by default at the target; a staged shot can aim ahead and higher
+    // (aimAhead / aimY) to level the frame, e.g. to keep a helicopter in view.
+    const lookX = target.x + Math.cos(this.camYaw) * this.aimAhead;
+    const lookZ = target.z + Math.sin(this.camYaw) * this.aimAhead;
+    const lookY = this.aimY !== null ? this.aimY : (inCar ? 2 : 1.6);
+    this.camera.lookAt(lookX, lookY, lookZ);
     // Sun follows the action so shadows stay local.
     this.sunTarget.position.set(target.x, 0, target.z);
     this.sun.position.set(target.x + 120, 220, target.z + 180);

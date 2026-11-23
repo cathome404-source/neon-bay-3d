@@ -29,12 +29,14 @@ export function makeCar(kind, color) {
     sports: { l: 4.6, w: 2.0, h: 0.6, cabL: 2.0, cabH: 0.55, y: 0.5 },
     taxi: { l: 4.4, w: 2.0, h: 0.75, cabL: 2.2, cabH: 0.65, y: 0.55 },
     truck: { l: 6.2, w: 2.3, h: 1.0, cabL: 1.8, cabH: 0.9, y: 0.7 },
+    bus: { l: 7.5, w: 2.4, h: 1.5, cabL: 2.0, cabH: 0.8, y: 0.85 },
     police: { l: 4.5, w: 2.0, h: 0.78, cabL: 2.2, cabH: 0.65, y: 0.55 },
     swat: { l: 5.4, w: 2.3, h: 1.9, cabL: 0, cabH: 0, y: 1.0 },
   }[kind] || { l: 4.4, w: 2.0, h: 0.75, cabL: 2.2, cabH: 0.65, y: 0.55 };
   const { l, w, h, cabL, cabH, y } = dims;
   box(g, l, h, w, 0, y, 0, bodyMat);
   if (cabL > 0) box(g, cabL, cabH, w * 0.86, -l * 0.05, y + h / 2 + cabH / 2, 0, glassMat);
+  if (kind === 'bus') box(g, l * 0.8, 0.25, w * 0.5, 0, y + h + cabH + 0.1, 0, mat(0x2e6fc2, { emissive: 0x1a4a8a, emissiveIntensity: 0.6 })); // route sign
   if (kind === 'sports') box(g, 1.2, 0.1, w * 0.9, -l / 2 + 0.2, y + h + 0.15, 0, darkMat); // spoiler
   if (kind === 'taxi') {
     box(g, 1.0, 0.35, 0.7, 0, y + h + cabH + 0.15, 0, mat(0xf2c200, { emissive: 0xaa8800, emissiveIntensity: 0.6 }));
@@ -73,7 +75,9 @@ export function makeCar(kind, color) {
     // Police livery: white doors.
     box(g, l * 0.5, h * 0.7, w + 0.06, 0, y, 0, mat(0xf0f0f0, { roughness: 0.6 }));
   }
-  return { group: g, wheels, heads, tails, lightBar, bodyMat, length: l, width: w };
+  // Brake lights: the tail material is exposed so the physics step can flare
+  // it when the car brakes or handbrakes.
+  return { group: g, wheels, heads, tails, tailMat, lightBar, bodyMat, length: l, width: w };
 }
 
 // A person: legs, torso, head, arms. userData holds limbs for walk animation.
@@ -94,6 +98,8 @@ export function makeCharacter(shirt, pants, skin) {
 }
 
 // Police helicopter: body, tail, main + tail rotors, searchlight.
+// Scaled up 15% and given a bright yellow side stripe + a blinking
+// anti-collision beacon so it reads clearly in the chase camera.
 export function makeHeli() {
   const g = new T.Group();
   const bodyMat = mat(0x1a1a22);
@@ -101,9 +107,15 @@ export function makeHeli() {
   box(g, 0.7, 0.7, 1.0, 0, 0.1, 1.35, mat(0x1a2530, { roughness: 0.15, metalness: 0.6 })); // nose glass
   box(g, 3.4, 0.5, 0.5, 0, 0.2, -2.6, bodyMat); // tail boom
   box(g, 0.3, 1.6, 1.2, 0, 0.6, -4.2, bodyMat); // tail fin
+  box(g, 3.3, 0.22, 1.84, 0, 0.35, 0, mat(0xffea00, { emissive: 0xaa8800, emissiveIntensity: 0.7 })); // yellow side stripe
   const skids = mat(0x333333);
   box(g, 2.6, 0.15, 0.15, 0, -1.1, 0.7, skids);
   box(g, 2.6, 0.15, 0.15, 0, -1.1, -0.7, skids);
+  // Blinking anti-collision beacon on the roof.
+  const beaconMat = mat(0xff2222, { emissive: 0xff2222, emissiveIntensity: 2 });
+  const beacon = new T.Mesh(_sphere, beaconMat);
+  beacon.scale.setScalar(0.55); beacon.position.set(0, 1.05, 0);
+  g.add(beacon);
   const rotor = new T.Group();
   const bladeMat = mat(0x111111);
   box(rotor, 7.5, 0.08, 0.5, 0, 0, 0, bladeMat);
@@ -124,7 +136,8 @@ export function makeHeli() {
   cone.rotation.x = Math.PI; // apex up at the heli
   cone.position.y = -21;
   g.add(cone);
-  g.userData = { rotor, tailRotor, spot, cone };
+  g.scale.setScalar(1.15);
+  g.userData = { rotor, tailRotor, spot, cone, beacon, beaconMat };
   return g;
 }
 

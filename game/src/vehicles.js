@@ -29,14 +29,24 @@ export class Car {
     this.airTime = 0;      // >0 while airborne off a ramp
     this.y = 0;
     this.steer = 0;
+    this.braking = false;  // true while braking / handbraking (brake lights)
     this.ramCooldown = 0;
     this.bumpCooldown = 0;
     this.headlight = null; // SpotLight, added for the player's car
+    this.group.rotation.order = 'YXZ'; // yaw, then roll around the forward axis
     this.updateMesh();
   }
   updateMesh() {
     this.group.position.set(this.x, this.y, this.z);
     this.group.rotation.y = -this.heading;
+    // Body roll: the car leans into a turn, scaled by speed. Small but it
+    // sells the arcade feel in the chase camera.
+    const spdNorm = Math.min(1, Math.abs(this.speed) / (this.maxSpeed || TUNING.carMaxSpeed));
+    this.group.rotation.x = -this.steer * spdNorm * TUNING.bodyRoll;
+    // Brake lights flare while braking or handbraking.
+    if (this.model.tailMat) {
+      this.model.tailMat.emissiveIntensity = this.braking ? 3.5 : 1.2;
+    }
     // Wheel spin + front-wheel steer.
     const spin = this.speed * 0.12;
     this.model.wheels.forEach((w, i) => {
@@ -77,6 +87,8 @@ export function stepCarPhysics(car, input, dt, colliders, ramps, fx) {
     if (Math.abs(car.speed) < 0.4) car.speed = 0;
   }
   car.speed = clamp(car.speed, -TUNING.carReverseMax, maxSpeed);
+  // Braking state drives the brake lights (see updateMesh).
+  car.braking = (input.throttle < 0 && car.speed > 0.5) || !!input.handbrake;
   // Steering: less effective at very low speed, sharper when slow.
   const spd = Math.abs(car.speed);
   const steerTarget = input.steer * TUNING.carTurn * clamp(spd / 8, 0, 1) * (input.handbrake ? 1.6 : 1);
@@ -159,8 +171,8 @@ export class Traffic {
     if (axis === 'x') { x = along; z = road + lane * dir; heading = dir > 0 ? 0 : Math.PI; }
     else { x = road - lane * dir; z = along; heading = dir > 0 ? Math.PI / 2 : -Math.PI / 2; }
     if (avoid && dist2(x, z, avoid.x, avoid.z) < 60) return;
-    const kind = pick(rng, ['sedan', 'sedan', 'sedan', 'taxi', 'sports', 'truck']);
-    const color = kind === 'taxi' ? COLORS.taxi : pick(rng, COLORS.carColors);
+    const kind = pick(rng, ['sedan', 'sedan', 'sedan', 'taxi', 'sports', 'truck', 'bus']);
+    const color = kind === 'taxi' ? COLORS.taxi : kind === 'bus' ? pick(rng, [0x2e6fc2, 0x2ea86a, 0xc23b2e]) : pick(rng, COLORS.carColors);
     const car = new Car(this.scene, kind, color, x, z, heading);
     car.isTraffic = true;
     car.speed = TUNING.trafficSpeed * (0.8 + rng() * 0.4);

@@ -31,6 +31,11 @@ export class Input {
   }
   down(code) { return this.keys.has(code); }
   wasPressed(code) { return this.pressed.has(code); }
+  // True if any of the given codes is held down. Used for keys with two
+  // bindings (e.g. P / Escape both pause).
+  anyOf(codes) { return codes.some((c) => this.keys.has(c)); }
+  // True if any of the given codes was pressed this frame (edge-triggered).
+  anyPressed(codes) { return codes.some((c) => this.pressed.has(c)); }
   axis() {
     // returns {f, s} forward/strafe in -1..1 from WASD/arrows
     let f = 0, s = 0;

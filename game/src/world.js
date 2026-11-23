@@ -1,7 +1,7 @@
 // Neon Bay 3D — the city: roads, buildings, beach, docks, causeway, garage,
 // palms, streetlights, stunt ramps. All geometry is built in code (no models).
 // Returns colliders (AABBs), road helpers, and animated bits (water, heli pad).
-import { WORLD, COLORS, districtAt } from './config.js';
+import { WORLD, COLORS, NEON_COLORS, districtAt } from './config.js';
 import { pick, range } from './random.js';
 
 const T = window.THREE;
@@ -134,6 +134,19 @@ export function buildWorld(scene, rng) {
         const b = new T.Mesh(sphereGeo, new T.MeshStandardMaterial({ color: 0xff2222, emissive: 0xff2222, emissiveIntensity: 2 }));
         b.scale.setScalar(1.2); b.position.set(bx, h + 1, bz);
         scene.add(b);
+      }
+      // Neon sign on the face of tall downtown towers: a glowing bar that
+      // faces the nearest road, so the skyline reads at dusk.
+      if (downtown && h > 40 && rng() < 0.6) {
+        const neonCol = pick(rng, NEON_COLORS);
+        const sign = new T.Mesh(boxGeo, new T.MeshStandardMaterial({ color: neonCol, emissive: neonCol, emissiveIntensity: 1.8 }));
+        const faceZ = bz + d / 2 + 0.4;
+        sign.scale.set(Math.min(w * 0.7, 12), 1.1, 0.5);
+        sign.position.set(bx, h * 0.72, faceZ);
+        scene.add(sign);
+        const sign2 = sign.clone();
+        sign2.position.set(bx, h * 0.72, bz - d / 2 - 0.4);
+        scene.add(sign2);
       }
     }
   }

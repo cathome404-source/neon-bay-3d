@@ -98,6 +98,22 @@ export class AudioEngine {
     this.blip(120, 0.1, 'square', 0.25);
   }
   pickup() { this.blip(880, 0.1, 'sine', 0.25); setTimeout(() => this.blip(1320, 0.14, 'sine', 0.25), 90); }
+  // Tyre skid: a short burst of filtered noise, throttled by the caller.
+  skid() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * 0.22);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i += 1) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 1.2;
+    const g = this.ctx.createGain(); g.gain.value = 0.22;
+    src.connect(f); f.connect(g); g.connect(this.master);
+    src.start(t);
+  }
+  // Car door: a low thunk followed by a softer click.
+  door() { this.blip(180, 0.09, 'square', 0.25); setTimeout(() => this.blip(320, 0.07, 'square', 0.15), 70); }
   jingle() {
     const notes = [523, 659, 784, 1047];
     notes.forEach((n, i) => setTimeout(() => this.blip(n, 0.18, 'triangle', 0.3), i * 110));

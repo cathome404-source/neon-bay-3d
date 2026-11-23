@@ -232,7 +232,7 @@ export class Police {
     if (this.heli) return;
     const group = makeHeli();
     this.scene.add(group);
-    this.heli = { group, x: player.x, z: player.z - 40, y: 42, rotor: group.userData.rotor };
+    this.heli = { group, x: player.x, z: player.z - 40, y: TUNING.heliHoverY, rotor: group.userData.rotor, hoverY: TUNING.heliHoverY };
     this.say('Dispatch: NEON-1 is tracking the suspect');
   }
   removeHeli() {
@@ -320,22 +320,31 @@ export class Police {
       const los = hasLineOfSight(this.colliders, car.x, car.z, target.x, target.z);
       if (los && d < 90) car.lastSeen = { x: target.x, z: target.z, t: this.time };
       const chasePlayer = car.lastSeen && (this.time - car.lastSeen.t) < 8;
+      // Lead targeting: aim at where the player WILL be, not where they are.
+      // A fleeing car is intercepted instead of chased from behind, so the
+      // pursuit actually cuts the player off at intersections.
+      const leadT = playerCar ? clamp(Math.abs(playerCar.speed) * 0.06, 0, 1.1) : 0;
+      const leadX = target.x + Math.cos(target.heading || 0) * (playerCar ? playerCar.speed * leadT : 0);
+      const leadZ = target.z + Math.sin(target.heading || 0) * (playerCar ? playerCar.speed * leadT : 0);
       // PIT: interceptors aim at the rear quarter (only while chasing).
-      let tx = chasePlayer ? target.x : (car.lastSeen ? car.lastSeen.x : target.x);
-      let tz = chasePlayer ? target.z : (car.lastSeen ? car.lastSeen.z : target.z);
+      let tx = chasePlayer ? leadX : (car.lastSeen ? car.lastSeen.x : target.x);
+      let tz = chasePlayer ? leadZ : (car.lastSeen ? car.lastSeen.z : target.z);
       if (car.isInterceptor && playerCar && chasePlayer) {
         const rear = playerCar.heading + Math.PI;
-        tx = target.x + Math.cos(rear) * 4;
-        tz = target.z + Math.sin(rear) * 4;
+        tx = leadX + Math.cos(rear) * 4;
+        tz = leadZ + Math.sin(rear) * 4;
       }
       const desired = Math.atan2(tz - car.z, tx - car.x);
       const steer = clamp(angleDiff(car.heading, desired) * 1.6, -1, 1);
       const dd = dist2(car.x, car.z, tx, tz);
       const throttle = dd > 6 ? 1 : 0.3;
       stepCarPhysics(car, { throttle, steer, handbrake: false }, dt, this.colliders, [], fx);
-      // Ram damage.
+      // Ram damage. 2.0s between rams per unit: at policeRamDamage 2 this
+      // is 1.0 DPS per pursuit car, so a lone 1-star unit cannot grind a
+      // 100 HP car to scrap during a normal mission; the threat scales
+      // with the number of units at higher wanted levels.
       if (d < 4.6 && car.ramCooldown <= 0) {
-        car.ramCooldown = 1.2;
+        car.ramCooldown = 2.0;
         if (playerCar) { playerCar.damage(TUNING.policeRamDamage, fx); }
         else { player.damage(8); }
         if (fx) fx('ram', car);
@@ -379,25 +388,30 @@ export class Police {
       }
     }
     // Helicopter: hover ahead and to the side so the player (and the camera)
-    // can see it, rotor spins, searchlight tracks the player.
+    // can see it, rotor spins, searchlight tracks the player. Hover offsets
+    // come from TUNING so the chase shot and live play stage it the same way.
     if (this.heli) {
       const h = this.heli;
       const hd = target.heading || 0;
       // Hover ahead and slightly to the side, close to the camera axis so
       // the chase camera (62 deg FOV) can see it: ~18 deg off-axis, ~27 deg
       // elevation at hover height 30.
-      const tx = target.x + Math.cos(hd) * 45 - Math.sin(hd) * 15;
-      const tz = target.z + Math.sin(hd) * 45 + Math.cos(hd) * 15;
+      const tx = target.x + Math.cos(hd) * TUNING.heliAhead - Math.sin(hd) * TUNING.heliSide;
+      const tz = target.z + Math.sin(hd) * TUNING.heliAhead + Math.cos(hd) * TUNING.heliSide;
       h.x += (tx - h.x) * Math.min(1, dt * 0.7);
       h.z += (tz - h.z) * Math.min(1, dt * 0.7);
-      h.y = (h.hoverY || 42) + Math.sin(performance.now() / 900) * 1.5;
+      h.y = (h.hoverY || TUNING.heliHoverY) + Math.sin(performance.now() / 900) * 1.5;
       h.group.position.set(h.x, h.y, h.z);
       h.group.rotation.y = Math.PI / 2 - Math.atan2(target.z - h.z, target.x - h.x);
       h.rotor.rotation.y += dt * 22;
       h.group.userData.tailRotor.rotation.x += dt * 30;
       h.group.userData.spot.target.position.set(target.x - h.x, -h.y, target.z - h.z);
       h.group.userData.spot.target.updateMatrixWorld();
-      h.group.userData.spot.intensity = 2.2;
+      h.group.userData.spot.intensity = 3.0;
+      // Anti-collision beacon blinks (1 Hz).
+      if (h.group.userData.beaconMat) {
+        h.group.userData.beaconMat.emissiveIntensity = (performance.now() / 500) % 2 < 1 ? 3.5 : 0.2;
+      }
     }
     // Wanted decay: if NO ground unit has line of sight to the player, the
     // trail goes cold and the heat drops a star. The helicopter tracks from

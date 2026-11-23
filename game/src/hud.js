@@ -34,6 +34,10 @@ export class HUD {
     this.dialogue = el('div', 'dialogue', this.root);
     // Center crosshair.
     this.crosshair = el('div', 'crosshair', this.root, '+');
+    // Low-health vignette: a red edge glow that pulses when the player is
+    // nearly down. Driven from update() by hp.
+    this.vignette = el('div', 'vignette', document.body);
+    this.vignette.style.opacity = '0';
     // Weapon wheel.
     this.wheel = el('div', 'wheel', document.body);
     this.wheelSlots = WEAPONS.map((w, i) => {
@@ -84,6 +88,10 @@ export class HUD {
     this.speed.textContent = s.inCar ? `${Math.round(s.speedKmh)} km/h${s.carHp !== undefined ? ` · car ${Math.max(0, Math.round(s.carHp))}%` : ''}` : 'On foot';
     this.objective.textContent = s.objective + (s.objectiveDist !== null && s.objectiveDist !== undefined ? ` — ${Math.round(s.objectiveDist)}m` : '');
     this.crosshair.style.display = s.inCar ? 'none' : 'block';
+    // Low-health vignette: pulses red under 25 HP, fades out above it.
+    const hpFrac = s.hp / s.maxHp;
+    const pulse = 0.45 + 0.25 * Math.sin(performance.now() / 180);
+    this.vignette.style.opacity = hpFrac < 0.25 ? String(pulse) : '0';
   }
   drawMinimap(s) {
     // s: {playerX, playerZ, playerHeading, cars:[{x,z,kind}], police:[{x,z}],
@@ -104,6 +112,16 @@ export class HUD {
       c.fillStyle = d.color + '22';
       c.fillRect(px(d.x0), pz(d.z0), px(d.x1) - px(d.x0), pz(d.z1) - pz(d.z0));
     }
+    // District labels + north arrow, so the minimap reads at a glance.
+    c.fillStyle = 'rgba(255,255,255,0.55)';
+    c.font = 'bold 8px sans-serif';
+    c.textAlign = 'center';
+    for (const d of DISTRICTS) {
+      c.fillText(d.name.toUpperCase(), (px(d.x0) + px(d.x1)) / 2, (pz(d.z0) + pz(d.z1)) / 2);
+    }
+    c.fillStyle = '#ffd76a';
+    c.font = 'bold 10px sans-serif';
+    c.fillText('N ↑', W / 2, 10);
     // Roads.
     c.strokeStyle = '#5a6270'; c.lineWidth = 3;
     for (const r of WORLD.roads) {

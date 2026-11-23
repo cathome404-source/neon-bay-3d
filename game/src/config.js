@@ -60,11 +60,48 @@ export const TUNING = {
   playerHp: 100,
   carHp: 100,
   wantedDecayTime: 22,    // seconds unseen before a star drops
-  policeRamDamage: 3,
+  policeRamDamage: 2,   // per ram; with the 2.0s ram cooldown this is 1.0
+  // DPS per pursuit car, so a 1-star chase no longer destroys the player's
+  // 100 HP car during a normal multi-minute mission. At higher wanted
+  // levels the extra patrol cars + interceptors keep the pressure real.
   heliMinWanted: 3,
   roadblockMinWanted: 4,
   swatMinWanted: 5,
+  // Polish pass: body roll, FOV kick, helicopter staging.
+  bodyRoll: 0.09,        // max body lean (rad) at full lock + full speed
+  fovKick: 9,            // extra camera FOV (deg) at top speed while driving
+  heliHoverY: 34,        // default helicopter hover height
+  heliAhead: 32,         // helicopter hover offset ahead of the player
+  heliSide: 10,          // helicopter hover offset to the side
+  skidSoundCooldown: 0.45,
 };
+
+// Neon sign colours for downtown building signs (world.js).
+export const NEON_COLORS = [0xff4f6a, 0x2eff8a, 0x7ac2ff, 0xffd76a, 0xff4fa3, 0x9dff2e];
+
+// Mission barks: a random line from the giver when a job starts, so the
+// story reads differently on a replay. Rival taunts play when a takedown
+// step begins.
+export const BARKS = {
+  Vic: [
+    'No questions, no witnesses, no problems.',
+    'Drive like the rent is due, Rex. Because it is.',
+    'The bay pays drivers who finish. Be one of them.',
+    'Keep it clean and the money is clean too.',
+  ],
+  Lena: [
+    'Eyes open, Rex. The Tide crew never sleeps.',
+    'You know the streets better than any of them.',
+    'Fast and quiet. That is how we win this.',
+    'I already told the crew you would pull it off.',
+  ],
+};
+export const TAUNTS = [
+  'Tide crew: "Look who crawled back to the bay!"',
+  'Tide crew: "This turf is ours, pretty boy!"',
+  'Tide crew: "Vic sent a driver? Send a real crew next time!"',
+  'Tide crew: "You are outnumbered, Rex. Walk away."',
+];
 
 // Four weapon tiers. 1/2/3/4 (or Q) switches; the wheel shows on Tab hold.
 export const WEAPONS = [

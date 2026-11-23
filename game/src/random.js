@@ -20,5 +20,22 @@ export function angleDiff(a, b) {
   while (d < -Math.PI) d += Math.PI * 2;
   return d;
 }
+// Normalise an angle to [-PI, PI]. Used by the chase camera yaw wrap.
+export function clampAngle(a) {
+  while (a > Math.PI) a -= Math.PI * 2;
+  while (a < -Math.PI) a += Math.PI * 2;
+  return a;
+}
+// Weighted pick: items are [value, weight].
+export function pickWeighted(rng, items) {
+  let total = 0;
+  for (const [, w] of items) total += w;
+  let r = rng() * total;
+  for (const [v, w] of items) {
+    r -= w;
+    if (r <= 0) return v;
+  }
+  return items[items.length - 1][0];
+}
 // 2D distance on the ground plane.
 export function dist2(ax, az, bx, bz) { return Math.hypot(ax - bx, az - bz); }

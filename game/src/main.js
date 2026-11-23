@@ -50,6 +50,7 @@ class Game {
     this.exhaustTimer = 0;
     this.smokeTimers = new Map();
     this.wantedThrottle = 0;
+    this.skidTimer = 0;
     this.saveData = this.loadSave();
     this.ctx = {
       player: this.player,
@@ -77,12 +78,28 @@ class Game {
       this.mode = 'playing';
       this.shot = setupShot(this.shotName, this);
       if (typeof this.camYaw === 'number') this.renderer.camYaw = this.camYaw;
+    } else if (params.get('mission') !== null) {
+      // Debug hook for play-testing a later mission directly: ?mission=1
+      // starts Hot Wheels, ?mission=2 starts Cash Run, and so on. Normal
+      // players never see this — the title screen is skipped.
+      const mi = Math.max(0, Math.min(MISSIONS.length - 1, Number(params.get('mission')) || 0));
+      this.mode = 'playing';
+      this.audio.init();
+      this.missions.start(mi, this.ctx);
     } else {
       this.hud.showScreen('title', { save: this.saveData }, {
         onStart: (newGame) => this.startGame(newGame),
       });
     }
     window.__nbState = () => this.debugState();
+    // Debug helper: where the helicopter projects on screen (NDC -1..1).
+    // Used by the screenshot test to prove the heli body is in frame.
+    window.__heliScreenPos = () => {
+      const h = this.police.heli;
+      if (!h) return null;
+      const v = new T.Vector3(h.x, h.y, h.z).project(this.renderer.camera);
+      return { x: Number(v.x.toFixed(3)), y: Number(v.y.toFixed(3)), z: Number(v.z.toFixed(3)) };
+    };
     // Loop.
     let last = performance.now();
     const tick = (now) => {
@@ -349,6 +366,7 @@ class Game {
     this.player.group.visible = false;
     if (car.headlight) car.headlight.intensity = this.renderer.dusk > 0.3 ? 2.5 : 0;
     this.audio.blip(300, 0.1, 'square', 0.2);
+    this.audio.door();
   }
   exitCar() {
     const car = this.playerCar;
@@ -369,6 +387,7 @@ class Game {
     this.playerCar = null;
     this.player.inCar = null;
     this.ctx.playerCar = null;
+    this.audio.door();
   }
 
   // ---- garage shop ------------------------------------------------------------
@@ -494,7 +513,7 @@ class Game {
       if (this.wheelOpen) this.hud.showWheel(P.weapon);
       else this.hud.hideWheel();
     }
-    if (inp.wasPressed('KeyP') || inp.wasPressed('Escape')) {
+    if (inp.anyPressed(['KeyP', 'Escape'])) {
       if (this.mode === 'playing') {
         this.mode = 'paused';
         this.save();
@@ -534,6 +553,9 @@ class Game {
       if ((drive.handbrake && Math.abs(car.speed) > 10) || (Math.abs(drive.steer) > 0.8 && Math.abs(car.speed) > 22)) {
         const back = car.heading + Math.PI;
         this.renderer.addSkid(car.x + Math.cos(back) * 2, car.z + Math.sin(back) * 2, car.heading);
+        // Tyre skid sound, throttled so it does not stutter every frame.
+        this.skidTimer -= dt;
+        if (this.skidTimer <= 0) { this.skidTimer = TUNING.skidSoundCooldown; this.audio.skid(); }
       }
       if (car.headlight) car.headlight.intensity = this.renderer.dusk > 0.3 ? 2.5 : 0;
     } else {
@@ -582,9 +604,10 @@ class Game {
       else if (e.type === 'story-complete') this.hud.showDialogue('Story complete — Neon Bay is yours, Kingpin.', '');
       else if (e.type === 'mission-failed') this.hud.showDialogue('Job failed — try again.', '');
     }
-    // Camera + particles.
+    // Camera + particles. FOV kicks with speed while driving.
     const target = P.inCar || P;
-    this.renderer.updateCamera(dt, target, !!P.inCar, inp.yawDelta, inp.pitchDelta);
+    const speedNorm = P.inCar ? Math.min(1, Math.abs(P.inCar.speed) / (P.inCar.maxSpeed || TUNING.carMaxSpeed)) : 0;
+    this.renderer.updateCamera(dt, target, !!P.inCar, inp.yawDelta, inp.pitchDelta, speedNorm);
     this.renderer.updateParticles(dt);
     // Water shimmer + beacon pulse.
     const t = performance.now() / 1000;
@@ -592,7 +615,6 @@ class Game {
     const beacon = this.world.animated.beacon;
     if (beacon.visible) beacon.scale.setScalar(1 + Math.sin(t * 3) * 0.08);
     // Audio levels.
-    const speedNorm = P.inCar ? Math.abs(P.inCar.speed) / (P.inCar.maxSpeed || TUNING.carMaxSpeed) : 0;
     this.audio.setEngine(speedNorm, !!P.inCar);
     const nearestPolice = this.police.cars.reduce((m, c) => Math.min(m, dist2(c.x, c.z, P.x, P.z)), Infinity);
     this.audio.setSiren(nearestPolice < 60 ? 1 - nearestPolice / 60 : 0);
@@ -636,10 +658,22 @@ class Game {
 
   debugState() {
     const P = this.player;
+    // Nearest stealable car (for the mission-2 playtest) + parked sports cars.
+    let nearest = null;
+    for (const c of [...this.parked, ...this.traffic.cars, ...this.looseCars]) {
+      if (c.wreck) continue;
+      const d = dist2(P.x, P.z, c.x, c.z);
+      if (!nearest || d < nearest.dist) nearest = { kind: c.kind, dist: Math.round(d), x: Math.round(c.x), z: Math.round(c.z) };
+    }
     return {
       mode: this.mode,
       px: Math.round(P.x), pz: Math.round(P.z),
       heading: Number(P.heading.toFixed(3)),
+      // Camera yaw, for the play-test walk controller: on-foot movement is
+      // camera-relative (W = along camYaw), so the controller must steer by
+      // the real camYaw, not by the player heading (they differ at spawn
+      // and while the camera is still catching up).
+      camYaw: Number(this.renderer.camYaw.toFixed(3)),
       money: P.money, respect: P.respect,
       missionIndex: this.missions.index,
       mission: this.missions.current() ? this.missions.current().title : 'none',
@@ -651,12 +685,17 @@ class Game {
       weapon: P.weapon,
       inCar: !!P.inCar,
       carSpeed: P.inCar ? Math.round(P.inCar.speed * 3.6) : 0,
+      carKind: P.inCar ? P.inCar.kind : null,
+      carStolen: P.inCar ? !!P.inCar.stolen : false,
       traffic: this.traffic.cars.length,
       peds: this.peds.list.filter((p) => !p.dead).length,
       policeCars: this.police.cars.length,
       heli: !!this.police.heli,
+      heliScreen: (typeof window.__heliScreenPos === 'function') ? window.__heliScreenPos() : null,
       rivals: this.rivals.aliveCount(),
       drops: this.missions.drops.filter((d) => !d.taken).length + this.missions.ambientDrops.filter((d) => !d.taken).length,
+      nearestCar: nearest,
+      parked: this.parked.filter((c) => !c.wreck).map((c) => ({ kind: c.kind, x: Math.round(c.x), z: Math.round(c.z) })),
       shotReady: this.shotReady,
     };
   }

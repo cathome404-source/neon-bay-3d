@@ -54,7 +54,7 @@ export function setupShot(name, G) {
     M.start(2, G.ctx);
     G.renderer.setDusk(0.15);
     G.camYaw = -Math.PI / 2; // camera behind the player, looking north at the city
-    return { autopilot: null, settle: 2.0 };
+    return { autopilot: null, settleFrames: 180 };
   }
   if (name === 'chase') {
     // Speeding north across the causeway bridge, 3 stars, heli + police + roadblock, dusk.
@@ -65,16 +65,32 @@ export function setupShot(name, G) {
     putPlayerInCar(G, car);
     G.police.setWanted(3, 'shot setup');
     G.police.spawnHeli(P);
-    // Lower the heli for this shot (the bridge has no buildings above it),
-    // so it sits inside the camera frame instead of above it.
-    if (G.police.heli) G.police.heli.hoverY = 30;
+    // Place the helicopter straight into its hover spot (ahead + to the
+    // side, low) instead of letting it lerp in from its spawn point behind
+    // the car — the old staging left the body out of frame and only the
+    // searchlight cone showed. The chase camera also aims ahead and level
+    // (aimAhead/aimY) instead of down at the car, so the sky ahead — where
+    // the heli flies — is inside the 62 deg FOV.
+    if (G.police.heli) {
+      const h = G.police.heli;
+      h.hoverY = 22;
+      const hd = car.heading;
+      h.x = car.x + Math.cos(hd) * 32 - Math.sin(hd) * 10;
+      h.z = car.z + Math.sin(hd) * 32 + Math.cos(hd) * 10;
+      h.y = 22;
+      h.group.position.set(h.x, h.y, h.z);
+    }
+    G.renderer.aimAhead = 25;
+    G.renderer.aimY = 4;
     for (let i = 0; i < 2; i += 1) G.police.spawnPursuit(P, i === 1);
     G.police.spawnRoadblock({ x: -35, z: -295 }, -Math.PI / 2);
     // The roadblock sits 10m PAST the autopilot stop point, so the car
     // halts on the bridge with the roadblock visible ahead instead of
     // swerving around it and off the deck.
     M.start(4, G.ctx);
-    return { autopilot: () => driveAutopilot(G, -35, -285, -35, 17), settle: 3.0 };
+    // Longer settle (210 frames) so the heli, the pursuit cars and the
+    // roadblock are all staged before the screenshot is taken.
+    return { autopilot: () => driveAutopilot(G, -35, -285, -35, 17), settleFrames: 210 };
   }
   if (name === 'mission') {
     // Bank Job in progress downtown: rivals at the bank, cash drops, 2 stars.
@@ -85,7 +101,7 @@ export function setupShot(name, G) {
     G.police.setWanted(2, 'bank alarm');
     G.police.spawnPursuit(P, false);
     G.police.spawnPursuit(P, false);
-    return { autopilot: () => driveAutopilot(G, 35, 35), settle: 3.0 };
+    return { autopilot: () => driveAutopilot(G, 35, 35), settleFrames: 180 };
   }
   // cover (default): downtown, sports car, 2 stars, 3 police, mission 1 active.
   const car = G.spawnPlayerCar('sports', 0xe86a20, 35, 80, -Math.PI / 2);
@@ -97,5 +113,5 @@ export function setupShot(name, G) {
   G.police.spawnAt(29, -285, P, false, { heading: -Math.PI / 2 - 0.5, speed: 0, hold: true });
   G.police.spawnAt(105, -180, P, false); // flanking pursuer from the east
   M.start(0, G.ctx);
-  return { autopilot: () => driveAutopilot(G, 35, -245, 35), settle: 3.0 };
+  return { autopilot: () => driveAutopilot(G, 35, -245, 35), settleFrames: 180 };
 }

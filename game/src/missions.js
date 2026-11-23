@@ -1,8 +1,8 @@
 // Neon Bay 3D — the mission engine: 10 story missions, step state machine,
 // cash drops, race gates, turf claims, rewards, district standing.
-import { MISSIONS } from './config.js';
+import { MISSIONS, BARKS, TAUNTS } from './config.js';
 import { makeCashDrop } from './models.js';
-import { dist2 } from './random.js';
+import { dist2, pick } from './random.js';
 
 const T = window.THREE;
 
@@ -39,6 +39,9 @@ export class MissionManager {
     if (!m) { this.active = false; return; }
     this.active = true;
     this.say(m.intro, m.giver);
+    // A random bark from the giver so a replay reads differently.
+    const barks = BARKS[m.giver];
+    if (barks && barks.length) this.say(pick(Math.random, barks), m.giver);
     this.beginStep(ctx);
   }
   beginStep(ctx) {
@@ -52,6 +55,8 @@ export class MissionManager {
     if (step.type === 'takedown') {
       ctx.rivals.spawnAt(step.x, step.z, step.count);
       this.takedownTarget = step.count;
+      // The Tide crew talks back when they show up.
+      if (TAUNTS.length) this.say(pick(Math.random, TAUNTS), '');
     }
     if (step.type === 'race' && step.gates) {
       this.timer = step.time;
@@ -265,7 +270,7 @@ export class MissionManager {
     if (step && step.type === 'takedown') label += ` (${this.takedownTarget - (this.rivalsAlive || 0)}/${step.count})`;
     if (step && step.type === 'race') label += ` — ${Math.max(0, Math.ceil(this.timer))}s`;
     if (step && step.type === 'claim') label += ` — hold ${Math.max(0, (3 - this.channel)).toFixed(0)}s`;
-    return `${m.title}: ${label}`;
+    return `Job ${Math.min(this.index + 1, MISSIONS.length)}/10 · ${m.title}: ${label}`;
   }
   targetPos() {
     const step = this.currentStep();
