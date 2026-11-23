@@ -1,5 +1,6 @@
-// A small seeded random generator (mulberry32) plus the helpers the world
-// builder uses: range, int, pick, chance, shuffle. Pure functions only.
+// Deterministic randomness for Neon Bay 3D: a mulberry32 generator plus the
+// helpers the city builder leans on — range, int, pick, chance, shuffle.
+// Everything here is a pure function, so a seed always rebuilds the same city.
 // Exports: createRandom, range, int, pick, chance, shuffle.
 
 export function createRandom(seed) {
