@@ -1,6 +1,6 @@
-// Synthesized sound for Neon Bay 3D: a tiny WebAudio radio with three stations
-// plus engine hum, impacts and jingles — no audio files anywhere.
-// Exports: createAudio.
+// All sound in Neon Bay 3D is synthesized live with WebAudio: a tiny radio
+// with three stations plus engine hum, impacts and jingles — the game ships
+// no audio files at all. Exports: createAudio.
 
 import { RADIO_STATIONS } from './config.js';
 
