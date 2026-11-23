@@ -1,5 +1,6 @@
-// Builds the static city for Neon Bay 3D: road grid, blocks, district buildings,
-// streetlights, palms, containers and cranes. No game logic here, just geometry.
+// The static city of Neon Bay 3D: a road grid with blocks, district buildings,
+// streetlights, palms, containers and cranes. Geometry only — no gameplay
+// logic lives here, so the world can be rebuilt from a seed on its own.
 // Exports: buildWorld.
 
 import { TUNING, DISTRICTS } from './config.js';
