@@ -1,6 +1,6 @@
-// Keyboard and mouse input for Neon Bay 3D. Held keys are queried every
-// frame; one-shot presses (enter car, punch, pause, radio, weapon switch) are
-// queued and consumed once, so a press is never lost or counted twice.
+// Keyboard and mouse handling for Neon Bay 3D. Keys held down are polled each
+// frame, while single presses (enter car, punch, pause, radio, weapon switch)
+// sit in a queue and are consumed exactly once — no press is lost or double-counted.
 // Exports: createInput, WEAPONS (the four weapon slots in wheel order).
 
 export const WEAPONS = ['fists', 'pistol', 'shotgun', 'smg'];
