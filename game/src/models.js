@@ -1,7 +1,7 @@
-// Mesh builders for every moving thing in Neon Bay 3D: cars, people, police,
-// helicopter, palms, containers, cranes and single buildings. All use the
-// global THREE (loaded as a classic script). Each builder returns a THREE.Group
-// with the parts later sessions need stored in userData.
+// Mesh factories for everything that moves in Neon Bay 3D: cars, people,
+// police cars, the helicopter, palms, containers, cranes and lone buildings.
+// They all draw on the global THREE (loaded as a classic script), and each
+// returns a THREE.Group with the parts other modules need tucked into userData.
 // Exports: makeCar, makePlayer, makePoliceCar, makeHelicopter, makePedestrian,
 // makeBuildingMesh, makePalm, makeContainer, makeCrane.
 
