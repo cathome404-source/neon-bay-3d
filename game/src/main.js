@@ -1,6 +1,6 @@
 // The full game loop for Neon Bay 3D: menu, play, pause, busted and done
-// states, missions, HUD, audio, saving, a small garage repair, and the
-// screenshot mode behind ?shot=. Exports: nothing (it runs on load).
+// states wired to missions, HUD, audio, saving, Vic's small garage repair,
+// and the screenshot mode behind ?shot=. Exports: nothing (it runs on load).
 
 import { TUNING } from './config.js';
 import { createRandom } from './random.js';
