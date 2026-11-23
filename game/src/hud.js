@@ -1,6 +1,7 @@
 // The on-screen HUD for Neon Bay 3D: cash, respect, wanted stars, health,
-// speed, weapon, objective line, dialogue box, weapon wheel, end screen, and
-// a live minimap of the 600x600 city. Exports: createHud.
+// speed, current weapon, objective line, dialogue box, weapon wheel, end
+// screen, and a live minimap that plots the whole 600x600 city.
+// Exports: createHud.
 
 import { DISTRICTS } from './config.js';
 
