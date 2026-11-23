@@ -1,6 +1,6 @@
-// Screenshot staging for Neon Bay 3D: fixed, reproducible scenes for the
-// four dossier images — city cover, fast drive, helicopter chase, and a
-// mission moment. Exports: createShots, SHOT_NAMES.
+// Screenshot staging for Neon Bay 3D: fixed, reproducible scenes behind the
+// four dossier images — the city cover, a fast drive, the helicopter chase,
+// and a mission moment. Exports: createShots, SHOT_NAMES.
 
 export const SHOT_NAMES = ['cover', 'drive', 'chase', 'mission'];
 
