@@ -11,6 +11,12 @@
 // respect ranks, a synth radio, cash drops, burning/exploding cars, and save/load — all
 // rendered with three.js and synthesised WebAudio sound.
 //
+// Polish pass (recorded build 2): body roll + brake lights on every car, a speed
+// FOV kick in the chase camera, neon signs on the downtown towers, lead-targeting
+// police pursuit, mission barks and rival taunts, a low-health vignette, district
+// labels on the minimap, skid/door sounds, a bus in traffic, and a staged chase
+// shot where the NEON-1 helicopter is actually in frame.
+//
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
