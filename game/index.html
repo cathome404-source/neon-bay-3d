@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Neon Bay 3D — an original open-world crime game</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a1410; font-family: 'Segoe UI', Arial, sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; }
+  #game canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .hud { position: fixed; inset: 0; pointer-events: none; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.8); z-index: 5; }
+  .stars { position: absolute; top: 12px; left: 16px; font-size: 26px; letter-spacing: 4px; color: #ffd76a; }
+  .money { position: absolute; top: 46px; left: 16px; font-size: 26px; font-weight: 800; color: #7dff9a; }
+  .respect { position: absolute; top: 80px; left: 16px; font-size: 14px; color: #ffd76a; }
+  .district { position: absolute; top: 100px; left: 16px; font-size: 14px; }
+  .mapwrap { position: absolute; top: 12px; right: 12px; }
+  .minimap { width: 200px; height: 200px; border: 2px solid rgba(255,255,255,.5); border-radius: 8px; background: #1d2733; }
+  .dispatch { margin-top: 6px; font-size: 12px; background: rgba(10,14,22,.75); border-radius: 6px; padding: 6px 8px; max-width: 200px; }
+  .dispatch-title { font-weight: 700; color: #7ac2ff; margin-bottom: 3px; }
+  .dispatch-line { color: #d8e2f0; line-height: 1.35; }
+  .health { position: absolute; left: 16px; bottom: 64px; width: 220px; height: 14px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.4); border-radius: 7px; overflow: hidden; }
+  .healthbar { height: 100%; width: 100%; background: #4caf50; }
+  .weapon { position: absolute; left: 16px; bottom: 36px; font-size: 16px; font-weight: 700; }
+  .speed { position: absolute; left: 16px; bottom: 12px; font-size: 15px; color: #ffd76a; }
+  .objective { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); font-size: 16px; font-weight: 700; background: rgba(10,14,22,.7); padding: 6px 14px; border-radius: 6px; white-space: nowrap; }
+  .dialogue { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); font-size: 15px; background: rgba(20,16,10,.8); padding: 8px 16px; border-radius: 6px; max-width: 640px; text-align: center; transition: opacity .4s; }
+  .crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 22px; font-weight: 700; color: rgba(255,255,255,.85); }
+  .wheel { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); display: none; gap: 10px; z-index: 8; }
+  .wheelslot { pointer-events: auto; cursor: pointer; background: rgba(10,14,22,.85); border: 2px solid rgba(255,255,255,.35); border-radius: 10px; padding: 14px 18px; font-size: 16px; color: #fff; }
+  .wheelslot.active { border-color: #ffd76a; background: rgba(60,45,10,.9); }
+  .wheelslot b { color: #ffd76a; margin-right: 6px; }
+  .garage { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 460px; max-width: 92vw; background: rgba(16,12,10,.95); border: 2px solid #ffd76a; border-radius: 12px; padding: 20px 24px; color: #fff; z-index: 9; }
+  .garage h2 { margin: 0 0 4px; color: #ffd76a; }
+  .garage h3 { margin: 14px 0 6px; color: #7ac2ff; }
+  .garage .gmoney { color: #7dff9a; font-weight: 700; }
+  .garage .grow { display: flex; justify-content: space-between; align-items: center; margin: 5px 0; font-size: 14px; }
+  .garage .owned { color: #7dff9a; font-weight: 700; }
+  .garage .paintrow { display: flex; gap: 6px; flex-wrap: wrap; }
+  .garage button, .panel button { cursor: pointer; background: #ffd76a; color: #201408; border: none; border-radius: 6px; padding: 7px 14px; font-weight: 700; font-size: 14px; }
+  .garage button:hover, .panel button:hover { background: #ffe08a; }
+  .garage .gclose { text-align: right; margin: 14px 0 0; }
+  .screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(8,6,4,.72); z-index: 10; }
+  .panel { max-width: 620px; margin: 20px; background: rgba(18,14,10,.95); border: 2px solid #ffd76a; border-radius: 14px; padding: 28px 34px; color: #fff; text-align: center; }
+  .panel h1 { margin: 0 0 6px; font-size: 52px; letter-spacing: 2px; color: #ffd76a; }
+  .panel h1 span { color: #ff4f6a; }
+  .panel .tag { color: #7ac2ff; font-style: italic; margin: 0 0 14px; }
+  .panel .story { font-size: 16px; line-height: 1.5; }
+  .panel .controls { font-size: 13px; color: #c8c0b0; line-height: 1.6; }
+  .panel .stats { color: #7dff9a; font-weight: 700; }
+  .panel .buttons { display: flex; gap: 12px; justify-content: center; margin-top: 18px; }
+  .panel .foot { font-size: 12px; color: #999; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div id="game" aria-label="Neon Bay 3D: an original open-world crime game"></div>
+<script src="./vendor/three.min.js"></script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
