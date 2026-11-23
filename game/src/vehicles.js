@@ -1,5 +1,6 @@
-// Car physics and city traffic for Neon Bay 3D: one drivable vehicle wrapper
-// plus a self-driving traffic stream that always surrounds the player.
+// Driving and traffic for Neon Bay 3D: a drivable vehicle wrapper with
+// acceleration, steering and damage, plus a self-driving traffic stream
+// that keeps cars flowing around the player at all times.
 // Exports: createVehicle, createRoadDriver, createTraffic.
 
 import { TUNING } from './config.js';
