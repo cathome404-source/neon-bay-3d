@@ -1,6 +1,6 @@
-// The ten story missions for Neon Bay 3D: a small state machine per job that
-// watches where the player is, pays out on completion, and hands the next job
-// to the player through dialogue callbacks. Exports: createMissions.
+// Ten story jobs for Neon Bay 3D, each a small state machine that tracks
+// where Rex is, pays out when the job lands, and hands the next job over
+// through dialogue callbacks. Exports: createMissions.
 
 import { TUNING, MISSION_TITLES, DISTRICTS } from './config.js';
 import { makeCar, makePedestrian } from './models.js';
