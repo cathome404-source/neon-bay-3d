@@ -1,49 +1,112 @@
-// Keyboard + mouse-orbit input. No pointer lock (headless-safe): drag to orbit.
-export class Input {
-  constructor(canvas) {
-    this.keys = new Set();
-    this.mouseDown = false;
-    this.yawDelta = 0;
-    this.pitchDelta = 0;
-    this.lastX = 0;
-    this.lastY = 0;
-    this.clicked = false;   // left click this frame (shoot / punch)
-    this.pressed = new Set(); // keys pressed this frame (edge-triggered)
-    window.addEventListener('keydown', (e) => {
-      if (e.repeat) return;
-      this.keys.add(e.code);
-      this.pressed.add(e.code);
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-    });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    canvas.addEventListener('mousedown', (e) => {
-      this.mouseDown = true; this.lastX = e.clientX; this.lastY = e.clientY;
-      if (e.button === 0) this.clicked = true;
-    });
-    window.addEventListener('mouseup', () => { this.mouseDown = false; });
-    window.addEventListener('mousemove', (e) => {
-      if (!this.mouseDown) return;
-      this.yawDelta -= (e.clientX - this.lastX) * 0.005;
-      this.pitchDelta -= (e.clientY - this.lastY) * 0.004;
-      this.lastX = e.clientX; this.lastY = e.clientY;
-    });
-    window.addEventListener('blur', () => { this.keys.clear(); this.mouseDown = false; });
+// Keyboard and mouse input for Neon Bay 3D. Held keys are queried every
+// frame; one-shot presses (enter car, punch, pause, radio, weapon switch) are
+// queued and consumed once, so a press is never lost or counted twice.
+// Exports: createInput, WEAPONS (the four weapon slots in wheel order).
+
+export const WEAPONS = ['fists', 'pistol', 'shotgun', 'smg'];
+
+const MOVE_CODES = new Set([
+  'KeyW', 'KeyA', 'KeyS', 'KeyD',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'ShiftLeft', 'ShiftRight', 'Space',
+]);
+
+export function createInput(target) {
+  const held = new Set();
+  const pressed = new Set();
+  let weaponIndex = 0;
+  let mouseX = 0;
+  let mouseY = 0;
+  let mouseDown = false;
+  let clicked = false;
+
+  function onKeyDown(event) {
+    if (MOVE_CODES.has(event.code) || event.code === 'Tab') {
+      event.preventDefault();
+    }
+    if (event.repeat) return;
+    held.add(event.code);
+    pressed.add(event.code);
+    if (event.code === 'Digit1') weaponIndex = 0;
+    else if (event.code === 'Digit2') weaponIndex = 1;
+    else if (event.code === 'Digit3') weaponIndex = 2;
+    else if (event.code === 'Digit4') weaponIndex = 3;
+    else if (event.code === 'Tab') weaponIndex = (weaponIndex + 1) % WEAPONS.length;
   }
-  down(code) { return this.keys.has(code); }
-  wasPressed(code) { return this.pressed.has(code); }
-  // True if any of the given codes is held down. Used for keys with two
-  // bindings (e.g. P / Escape both pause).
-  anyOf(codes) { return codes.some((c) => this.keys.has(c)); }
-  // True if any of the given codes was pressed this frame (edge-triggered).
-  anyPressed(codes) { return codes.some((c) => this.pressed.has(c)); }
-  axis() {
-    // returns {f, s} forward/strafe in -1..1 from WASD/arrows
-    let f = 0, s = 0;
-    if (this.down('KeyW') || this.down('ArrowUp')) f += 1;
-    if (this.down('KeyS') || this.down('ArrowDown')) f -= 1;
-    if (this.down('KeyD') || this.down('ArrowRight')) s += 1;
-    if (this.down('KeyA') || this.down('ArrowLeft')) s -= 1;
-    return { f, s };
+
+  function onKeyUp(event) {
+    held.delete(event.code);
   }
-  endFrame() { this.pressed.clear(); this.clicked = false; this.yawDelta = 0; this.pitchDelta = 0; }
+
+  function onMouseMove(event) {
+    mouseX = event.clientX;
+    mouseY = event.clientY;
+  }
+
+  function onMouseDown(event) {
+    if (event.button !== 0) return;
+    mouseDown = true;
+    clicked = true;
+  }
+
+  function onMouseUp(event) {
+    if (event.button !== 0) return;
+    mouseDown = false;
+  }
+
+  function onBlur() {
+    held.clear();
+    mouseDown = false;
+  }
+
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mousedown', onMouseDown);
+  window.addEventListener('mouseup', onMouseUp);
+  window.addEventListener('blur', onBlur);
+
+  return {
+    /** True while the key with this code is held down. */
+    held(code) {
+      return held.has(code);
+    },
+    /** True only once, on the frame after the key was pressed. */
+    takePressed(code) {
+      if (!pressed.has(code)) return false;
+      pressed.delete(code);
+      return true;
+    },
+    /** True only once, on the frame after a left mouse click. */
+    takeClick() {
+      if (!clicked) return false;
+      clicked = false;
+      return true;
+    },
+    /** Current mouse position in window pixels. */
+    mouse() {
+      return { x: mouseX, y: mouseY, down: mouseDown };
+    },
+    /** The weapon-wheel selection, as an index into WEAPONS. */
+    weaponIndex() {
+      return weaponIndex;
+    },
+    weapon() {
+      return WEAPONS[weaponIndex];
+    },
+    /** Forward/strafe input from WASD or arrows, as -1/0/1 each. */
+    moveAxes() {
+      const forward = (held.has('KeyW') || held.has('ArrowUp') ? 1 : 0)
+        - (held.has('KeyS') || held.has('ArrowDown') ? 1 : 0);
+      const strafe = (held.has('KeyD') || held.has('ArrowRight') ? 1 : 0)
+        - (held.has('KeyA') || held.has('ArrowLeft') ? 1 : 0);
+      return { forward, strafe };
+    },
+    sprint() {
+      return held.has('ShiftLeft') || held.has('ShiftRight');
+    },
+    brake() {
+      return held.has('Space');
+    },
+  };
 }

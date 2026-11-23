@@ -1,300 +1,200 @@
-// Neon Bay 3D — the city: roads, buildings, beach, docks, causeway, garage,
-// palms, streetlights, stunt ramps. All geometry is built in code (no models).
-// Returns colliders (AABBs), road helpers, and animated bits (water, heli pad).
-import { WORLD, COLORS, NEON_COLORS, districtAt } from './config.js';
-import { pick, range } from './random.js';
+// Builds the static city for Neon Bay 3D: road grid, blocks, district buildings,
+// streetlights, palms, containers and cranes. No game logic here, just geometry.
+// Exports: buildWorld.
 
-const T = window.THREE;
+import { TUNING, DISTRICTS } from './config.js';
+import { range, int, pick, chance } from './random.js';
+import { makeBuildingMesh, makePalm, makeContainer, makeCrane } from './models.js';
 
-function windowTexture(rng, litRatio) {
-  const c = document.createElement('canvas');
-  c.width = 64; c.height = 128;
-  const g = c.getContext('2d');
-  g.fillStyle = '#3a3f46'; g.fillRect(0, 0, 64, 128);
-  for (let y = 6; y < 122; y += 12) {
-    for (let x = 6; x < 58; x += 12) {
-      const lit = rng() < litRatio;
-      g.fillStyle = lit ? (rng() < 0.7 ? '#ffd98a' : '#9fd8ff') : '#232830';
-      g.fillRect(x, y, 7, 8);
+const ROAD_HALF = 6;
+const GRID_LINES = [-300, -240, -180, -120, -60, 0, 60, 120, 180, 240, 300];
+
+const matCache = new Map();
+function mat(color, emissive, intensity) {
+  const key = `${color}|${emissive || 0}|${intensity || 0}`;
+  if (!matCache.has(key)) {
+    const m = new THREE.MeshStandardMaterial({ color });
+    if (emissive) {
+      m.emissive = new THREE.Color(emissive);
+      m.emissiveIntensity = intensity || 1;
     }
+    matCache.set(key, m);
   }
-  const tex = new T.CanvasTexture(c);
-  tex.colorSpace = T.SRGBColorSpace;
-  return tex;
+  return matCache.get(key);
 }
 
-export function buildWorld(scene, rng) {
-  const colliders = [];   // {x0,z0,x1,z1}
-  const animated = { water: [], beacon: null };
-  const boxGeo = new T.BoxGeometry(1, 1, 1);
-  const cylGeo = new T.CylinderGeometry(0.35, 0.5, 6, 6);
-  const coneGeo = new T.ConeGeometry(2.2, 2.4, 6);
-  const sphereGeo = new T.SphereGeometry(0.5, 8, 6);
+function flat(w, d, color, y) {
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(color));
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = y;
+  return mesh;
+}
 
-  const mats = {
-    asphalt: new T.MeshStandardMaterial({ color: COLORS.asphalt, roughness: 0.95 }),
-    line: new T.MeshStandardMaterial({ color: COLORS.asphaltLine, roughness: 0.9 }),
-    sidewalk: new T.MeshStandardMaterial({ color: COLORS.sidewalk, roughness: 1 }),
-    sand: new T.MeshStandardMaterial({ color: COLORS.sand, roughness: 1 }),
-    water: new T.MeshStandardMaterial({ color: COLORS.water, roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.9 }),
-    grass: new T.MeshStandardMaterial({ color: COLORS.grass, roughness: 1 }),
-    trunk: new T.MeshStandardMaterial({ color: 0x7a5a3a, roughness: 1 }),
-    frond: new T.MeshStandardMaterial({ color: 0x3f8f4f, roughness: 1 }),
-    pole: new T.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.6, metalness: 0.6 }),
-    lamp: new T.MeshStandardMaterial({ color: 0xfff2c0, emissive: 0xffdf80, emissiveIntensity: 1.6 }),
-    containerA: new T.MeshStandardMaterial({ color: 0xc2502e, roughness: 0.8 }),
-    containerB: new T.MeshStandardMaterial({ color: 0x2e6fc2, roughness: 0.8 }),
-    containerC: new T.MeshStandardMaterial({ color: 0x2ea86a, roughness: 0.8 }),
-    crane: new T.MeshStandardMaterial({ color: 0xd8a020, roughness: 0.7 }),
-    ramp: new T.MeshStandardMaterial({ color: 0xe86a20, roughness: 0.7 }),
-    garage: new T.MeshStandardMaterial({ color: 0x8a2e2e, roughness: 0.85 }),
-    garageDoor: new T.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.5 }),
-    pier: new T.MeshStandardMaterial({ color: 0x8a7a66, roughness: 1 }),
+function pole(x, z, height, color) {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, height, 6), mat(color));
+  mesh.position.set(x, height / 2, z);
+  return mesh;
+}
+
+function lampHead(x, z, height, color) {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), mat(color, color, 1.6));
+  mesh.position.set(x, height + 0.1, z);
+  return mesh;
+}
+
+// Gentle rise used only inside The Hills so houses sit on low slopes.
+function hillLift(x, z) {
+  const hills = DISTRICTS[3];
+  const dx = x - hills.centre.x;
+  const dz = z - hills.centre.z;
+  const dist = Math.sqrt(dx * dx + dz * dz);
+  if (dist > hills.radius) return 0;
+  const falloff = 1 - dist / hills.radius;
+  return falloff * 1.6 * (0.5 + 0.5 * Math.sin(x * 0.03) * Math.cos(z * 0.025));
+}
+
+function wallColors() {
+  return [0x3a3f5e, 0x4a4a6a, 0x5e4a3a, 0x2e4a4a, 0x55405e, 0x6a5a3a, 0x3a5a4a, 0x4a3a5a];
+}
+
+function districtAt(x, z) {
+  for (const d of DISTRICTS) {
+    const dx = x - d.centre.x;
+    const dz = z - d.centre.z;
+    if (Math.sqrt(dx * dx + dz * dz) <= d.radius) return d;
+  }
+  return null;
+}
+
+function isOnRoad(x, z) {
+  const nearLine = (v) => {
+    const u = ((v % 60) + 60) % 60;
+    return Math.min(u, 60 - u) < ROAD_HALF;
   };
+  return nearLine(x) || nearLine(z);
+}
 
-  const winTexDay = windowTexture(rng, 0.35);
-  const winTexDusk = windowTexture(rng, 0.6);
-  const winMats = [winTexDay, winTexDusk].map((tex) => (tint) =>
-    new T.MeshStandardMaterial({ map: tex, color: tint, roughness: 0.85 }));
-  const roofMat = new T.MeshStandardMaterial({ color: 0x2a2e36, roughness: 1 });
+function randomRoadPoint(rng) {
+  const line = pick(rng, GRID_LINES);
+  const along = range(rng, -290, 290);
+  if (chance(rng, 0.5)) return { x: line, z: along };
+  return { x: along, z: line };
+}
 
-  function addBox(x, y, z, sx, sy, sz, mat, parent) {
-    const m = new T.Mesh(boxGeo, mat);
-    m.position.set(x, y, z); m.scale.set(sx, sy, sz);
-    m.castShadow = sy > 2; m.receiveShadow = true;
-    (parent || scene).add(m);
-    return m;
+export function buildWorld(rng) {
+  const group = new THREE.Group();
+  const buildings = [];
+  const roads = [];
+  const size = TUNING.world.citySize;
+
+  // Ground and pavement.
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(size, size),
+    new THREE.MeshStandardMaterial({ color: 0x1c1a2e }),
+  );
+  ground.rotation.x = -Math.PI / 2;
+  group.add(ground);
+  group.add(flat(size, size, 0x2e2c42, 0.01));
+
+  // Roads: dark strips on both axes, plus a pale centre line each.
+  for (const line of GRID_LINES) {
+    const vertical = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_HALF * 2, size), mat(0x17161f));
+    vertical.rotation.x = -Math.PI / 2;
+    vertical.position.set(line, 0.02, 0);
+    group.add(vertical);
+    const horizontal = new THREE.Mesh(new THREE.PlaneGeometry(size, ROAD_HALF * 2), mat(0x17161f));
+    horizontal.rotation.x = -Math.PI / 2;
+    horizontal.position.set(0, 0.02, line);
+    group.add(horizontal);
+    const centreV = flat(0.3, size, 0x8a8a9a, 0.03);
+    centreV.position.x = line;
+    group.add(centreV);
+    const centreH = flat(size, 0.3, 0x8a8a9a, 0.03);
+    centreH.position.z = line;
+    group.add(centreH);
+    roads.push({ x1: line, z1: -size / 2, x2: line, z2: size / 2 });
+    roads.push({ x1: -size / 2, z1: line, x2: size / 2, z2: line });
   }
 
-  // ---- ground: grass base, city slab, beach sand, pier ----
-  const ground = new T.Mesh(new T.PlaneGeometry(1200, 1200), mats.grass);
-  ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.05, 0); ground.receiveShadow = true;
-  scene.add(ground);
-  const citySlab = new T.Mesh(new T.PlaneGeometry(560, 560), mats.sidewalk);
-  citySlab.rotation.x = -Math.PI / 2; citySlab.position.set(0, 0, 0); citySlab.receiveShadow = true;
-  scene.add(citySlab);
-  const sand = new T.Mesh(new T.PlaneGeometry(560, 55), mats.sand);
-  sand.rotation.x = -Math.PI / 2; sand.position.set(0, 0.02, 302); sand.receiveShadow = true;
-  scene.add(sand);
-  const pier = new T.Mesh(new T.PlaneGeometry(55, 560), mats.pier);
-  pier.rotation.x = -Math.PI / 2; pier.position.set(302, 0.02, 0); pier.receiveShadow = true;
-  scene.add(pier);
-
-  // ---- water: south sea, east bay, north bay (animated) ----
-  function waterPlane(w, h, x, z) {
-    const m = new T.Mesh(new T.PlaneGeometry(w, h), mats.water.clone());
-    m.rotation.x = -Math.PI / 2; m.position.set(x, 0.05, z);
-    scene.add(m); animated.water.push(m);
-    return m;
-  }
-  waterPlane(1200, 300, 0, 480);    // south sea
-  waterPlane(300, 1200, 480, 0);    // east bay
-  waterPlane(1200, 120, 0, -390);   // north bay
-
-  // ---- roads: dark strips + dashed centre lines ----
-  for (const r of WORLD.roads) {
-    addBox(r, 0.01, 0, WORLD.roadHalf * 2, 0.1, 560, mats.asphalt);
-    addBox(0, 0.01, r, 560, 0.1, WORLD.roadHalf * 2, mats.asphalt);
-    for (let d = -266; d <= 266; d += 14) {
-      addBox(r, 0.06, d, 0.5, 0.06, 6, mats.line);
-      addBox(d, 0.06, r, 6, 0.06, 0.5, mats.line);
+  // Blocks between the roads: one or more buildings each, styled by district.
+  const blockCentres = [];
+  for (let i = 0; i < 10; i += 1) {
+    for (let j = 0; j < 10; j += 1) {
+      blockCentres.push({ x: -270 + i * 60, z: -270 + j * 60 });
     }
   }
-
-  // ---- north causeway (the bridge): deck over the north bay + railings ----
-  addBox(-35, 0.15, -305, 16, 0.5, 55, mats.asphalt);
-  addBox(-44, 0.8, -305, 0.8, 1.4, 55, mats.pole);
-  addBox(-26, 0.8, -305, 0.8, 1.4, 55, mats.pole);
-  for (let d = -282; d >= -328; d -= 8) addBox(-35, 0.45, d, 0.5, 0.06, 4, mats.line);
-
-  // ---- buildings: one per block slot, taller downtown ----
-  const blockCenters = [];
-  for (let i = -3; i <= 3; i += 1) for (let j = -3; j <= 3; j += 1) blockCenters.push([i * 70, j * 70]);
-  for (const [cx, cz] of blockCenters) {
-    const downtown = Math.abs(cx) < 140 && Math.abs(cz) < 140;
-    const n = downtown ? 1 + Math.floor(rng() * 2) : 1 + Math.floor(rng() * 3);
-    for (let k = 0; k < n; k += 1) {
-      const bx = cx + (n === 1 ? 0 : range(rng, -14, 14));
-      const bz = cz + (n === 1 ? 0 : range(rng, -14, 14));
-      // Keep the garage block clear for Vic's garage.
-      if (Math.abs(bx + 70) < 20 && Math.abs(bz + 70) < 20) continue;
-      const w = range(rng, 14, 26);
-      const d = range(rng, 14, 26);
-      const h = downtown ? range(rng, 30, 85) : range(rng, 7, 22);
-      const tint = pick(rng, downtown ? COLORS.downtownPalette : COLORS.buildingPalette);
-      const side = winMats[Math.floor(rng() * winMats.length)](tint);
-      const mesh = new T.Mesh(boxGeo, [side, side, roofMat, roofMat, side, side]);
-      mesh.position.set(bx, h / 2, bz);
-      mesh.scale.set(w, h, d);
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      scene.add(mesh);
-      colliders.push({ x0: bx - w / 2 - 0.5, z0: bz - d / 2 - 0.5, x1: bx + w / 2 + 0.5, z1: bz + d / 2 + 0.5 });
-      // Rooftop beacon on the tallest downtown towers.
-      if (downtown && h > 60 && rng() < 0.5) {
-        const b = new T.Mesh(sphereGeo, new T.MeshStandardMaterial({ color: 0xff2222, emissive: 0xff2222, emissiveIntensity: 2 }));
-        b.scale.setScalar(1.2); b.position.set(bx, h + 1, bz);
-        scene.add(b);
+  for (const block of blockCentres) {
+    const district = districtAt(block.x, block.z);
+    const name = district ? district.name : 'Midtown';
+    const lift = district && district.name === 'The Hills' ? hillLift(block.x, block.z) : 0;
+    const count = district && district.name === 'Downtown' ? int(rng, 1, 2) : int(rng, 1, 3);
+    for (let n = 0; n < count; n += 1) {
+      const w = range(rng, 14, 30);
+      const d = range(rng, 14, 30);
+      const bx = block.x + range(rng, -10, 10);
+      const bz = block.z + range(rng, -10, 10);
+      let h;
+      let pitched = false;
+      if (district) {
+        h = range(rng, district.minHeight, district.maxHeight);
+        if (district.name === 'The Hills') pitched = true;
+      } else {
+        h = range(rng, 10, 42);
       }
-      // Neon sign on the face of tall downtown towers: a glowing bar that
-      // faces the nearest road, so the skyline reads at dusk.
-      if (downtown && h > 40 && rng() < 0.6) {
-        const neonCol = pick(rng, NEON_COLORS);
-        const sign = new T.Mesh(boxGeo, new T.MeshStandardMaterial({ color: neonCol, emissive: neonCol, emissiveIntensity: 1.8 }));
-        const faceZ = bz + d / 2 + 0.4;
-        sign.scale.set(Math.min(w * 0.7, 12), 1.1, 0.5);
-        sign.position.set(bx, h * 0.72, faceZ);
-        scene.add(sign);
-        const sign2 = sign.clone();
-        sign2.position.set(bx, h * 0.72, bz - d / 2 - 0.4);
-        scene.add(sign2);
+      const color = pick(rng, wallColors());
+      const mesh = makeBuildingMesh(w, d, h, color, { pitched });
+      mesh.position.set(bx, lift - 0.3, bz);
+      mesh.rotation.y = chance(rng, 0.5) ? 0 : Math.PI / 2;
+      group.add(mesh);
+      buildings.push({ x: bx, z: bz, w, d, h, district: name });
+      // Downtown towers get a glowing neon sign on one face.
+      if (district && district.name === 'Downtown' && chance(rng, 0.55)) {
+        const sign = new THREE.Mesh(
+          new THREE.BoxGeometry(range(rng, 4, 9), range(rng, 1, 2.2), 0.4),
+          mat(pick(rng, [0xff2e88, 0x2ec8ff, 0xffd23e]), pick(rng, [0xff2e88, 0x2ec8ff, 0xffd23e]), 1.8),
+        );
+        sign.position.set(bx + w / 2 + 0.3, h * range(rng, 0.45, 0.85), bz);
+        group.add(sign);
       }
     }
   }
 
-  // ---- Vic's garage (south-west block): big low building + door + sign ----
-  const garage = new T.Group();
-  garage.position.set(-70, 0, -70);
-  const gBody = new T.Mesh(boxGeo, mats.garage);
-  gBody.scale.set(34, 10, 24); gBody.position.y = 5; gBody.castShadow = true; gBody.receiveShadow = true;
-  garage.add(gBody);
-  const gDoor = new T.Mesh(boxGeo, mats.garageDoor);
-  gDoor.scale.set(16, 7, 0.6); gDoor.position.set(0, 3.5, 12.2);
-  garage.add(gDoor);
-  const gSign = new T.Mesh(boxGeo, new T.MeshStandardMaterial({ color: 0xffd76a, emissive: 0xffb020, emissiveIntensity: 1.2 }));
-  gSign.scale.set(20, 1.6, 0.6); gSign.position.set(0, 11, 12.2);
-  garage.add(gSign);
-  scene.add(garage);
-  colliders.push({ x0: -70 - 17, z0: -70 - 12, x1: -70 + 17, z1: -70 + 12 });
-
-  // ---- docks: containers + cranes on the east pier ----
-  const containerMats = [mats.containerA, mats.containerB, mats.containerC];
-  for (let i = 0; i < 14; i += 1) {
-    const cx = range(rng, 288, 318);
-    const cz = -240 + i * 36 + range(rng, -8, 8);
-    const stacked = rng() < 0.4;
-    addBox(cx, 1.4, cz, 12, 2.8, 3, pick(rng, containerMats));
-    if (stacked) addBox(cx, 4.2, cz, 12, 2.8, 3, pick(rng, containerMats));
-    colliders.push({ x0: cx - 6.5, z0: cz - 2, x1: cx + 6.5, z1: cz + 2 });
-  }
-  for (const cz of [-180, 0, 180]) {
-    addBox(310, 12, cz, 3, 24, 3, mats.crane);
-    const arm = addBox(300, 24, cz, 22, 2, 2, mats.crane);
-    arm.rotation.z = 0.12;
-    colliders.push({ x0: 308, z0: cz - 2, x1: 312, z1: cz + 2 });
-  }
-
-  // ---- palms along the beach + scattered in the city ----
-  function palm(x, z) {
-    const g = new T.Group();
-    const trunk = new T.Mesh(cylGeo, mats.trunk);
-    trunk.position.y = 3; trunk.castShadow = true;
-    g.add(trunk);
-    for (let i = 0; i < 6; i += 1) {
-      const frond = new T.Mesh(coneGeo, mats.frond);
-      const a = (i / 6) * Math.PI * 2;
-      frond.position.set(Math.cos(a) * 1.6, 6.4, Math.sin(a) * 1.6);
-      frond.rotation.z = Math.cos(a) * 1.1;
-      frond.rotation.x = -Math.sin(a) * 1.1;
-      frond.scale.set(1, 0.7, 1);
-      g.add(frond);
-    }
-    g.position.set(x, 0, z);
-    scene.add(g);
-    colliders.push({ x0: x - 0.8, z0: z - 0.8, x1: x + 0.8, z1: z + 0.8 });
-  }
-  for (let x = -260; x <= 260; x += 40) { palm(x + range(rng, -6, 6), 288); palm(x + range(rng, -6, 6), 318); }
-  for (let i = 0; i < 18; i += 1) palm(range(rng, -260, 260), range(rng, -260, 260));
-
-  // ---- streetlights at intersections ----
-  for (const r of WORLD.roads) {
-    for (const c of WORLD.roads) {
-      if (rng() < 0.5) continue;
-      const lx = r + 8, lz = c + 8;
-      const pole = new T.Mesh(new T.CylinderGeometry(0.18, 0.22, 7, 6), mats.pole);
-      pole.position.set(lx, 3.5, lz); pole.castShadow = true;
-      scene.add(pole);
-      const lamp = new T.Mesh(sphereGeo, mats.lamp);
-      lamp.scale.setScalar(0.9); lamp.position.set(lx, 7.2, lz);
-      scene.add(lamp);
+  // Streetlights at every second intersection.
+  for (let i = 0; i < GRID_LINES.length; i += 2) {
+    for (let j = 0; j < GRID_LINES.length; j += 2) {
+      const x = GRID_LINES[i] + 7;
+      const z = GRID_LINES[j] + 7;
+      group.add(pole(x, z, 5.5, 0x555566));
+      group.add(lampHead(x, z, 5.5, 0xffd9a0));
     }
   }
 
-  // ---- stunt ramps: two wedges that launch cars ----
-  const ramps = [];
-  function ramp(x, z, heading) {
-    const g = new T.Group();
-    const wedge = new T.Mesh(boxGeo, mats.ramp);
-    wedge.scale.set(10, 1.2, 8);
-    wedge.position.y = 1.2;
-    wedge.rotation.z = -0.35;
-    wedge.castShadow = true;
-    g.add(wedge);
-    const stripe = new T.Mesh(boxGeo, new T.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.4 }));
-    stripe.scale.set(10, 0.3, 1); stripe.position.set(0, 2.6, 0); stripe.rotation.z = -0.35;
-    g.add(stripe);
-    g.position.set(x, 0, z);
-    g.rotation.y = heading;
-    scene.add(g);
-    ramps.push({ x, z, heading, w: 10, d: 8 });
+  // Beachfront: palm rows along the north shore.
+  for (let i = 0; i < 16; i += 1) {
+    const palm = makePalm();
+    palm.position.set(-40 + i * 18 + range(rng, -4, 4), 0, -292 + range(rng, -3, 3));
+    palm.rotation.y = rng() * Math.PI * 2;
+    group.add(palm);
   }
-  ramp(175, -105, 0);
-  ramp(-175, 175, Math.PI / 2);
 
-  // ---- mission beacon: glowing cylinder reused by missions ----
-  const beacon = new T.Group();
-  const beam = new T.Mesh(
-    new T.CylinderGeometry(1.6, 1.6, 60, 12, 1, true),
-    new T.MeshBasicMaterial({ color: 0xffd76a, transparent: true, opacity: 0.25, side: T.DoubleSide, depthWrite: false }),
-  );
-  beam.position.y = 30;
-  beacon.add(beam);
-  const ring = new T.Mesh(
-    new T.TorusGeometry(3, 0.35, 8, 32),
-    new T.MeshBasicMaterial({ color: 0xffd76a }),
-  );
-  ring.rotation.x = Math.PI / 2; ring.position.y = 0.4;
-  beacon.add(ring);
-  beacon.visible = false;
-  scene.add(beacon);
-  animated.beacon = beacon;
-
-  return {
-    colliders,
-    ramps,
-    animated,
-    garagePos: { x: -35, z: -35 },
-    playerSpawn: { x: -35, z: -20, heading: Math.PI },
-    districtAt: (x, z) => districtAt(x, z),
-  };
-}
-
-// Circle (radius r) vs AABB colliders: push the point out, return corrected x/z.
-export function collideCircle(colliders, x, z, r) {
-  for (const c of colliders) {
-    if (x + r <= c.x0 || x - r >= c.x1 || z + r <= c.z0 || z - r >= c.z1) continue;
-    const dxl = x + r - c.x0, dxr = c.x1 - (x - r);
-    const dzl = z + r - c.z0, dzr = c.z1 - (z - r);
-    const m = Math.min(dxl, dxr, dzl, dzr);
-    if (m === dxl) x = c.x0 - r;
-    else if (m === dxr) x = c.x1 + r;
-    else if (m === dzl) z = c.z0 - r;
-    else z = c.z1 + r;
+  // Docks: stacked containers near the warehouses.
+  for (let i = 0; i < 22; i += 1) {
+    const container = makeContainer(pick(rng, [0xc23b2e, 0x2e7dc2, 0x3fae5a, 0xd9a03e, 0x8a8f96]));
+    const cx = -260 + range(rng, 0, 130);
+    const cz = 60 + range(rng, 0, 160);
+    container.position.set(cx, 1.3 + (chance(rng, 0.3) ? 2.6 : 0), cz);
+    container.rotation.y = chance(rng, 0.5) ? 0 : Math.PI / 2;
+    group.add(container);
   }
-  return { x, z };
-}
 
-export function pointInCollider(colliders, x, z) {
-  for (const c of colliders) if (x >= c.x0 && x <= c.x1 && z >= c.z0 && z <= c.z1) return true;
-  return false;
-}
-
-// Line of sight on the ground plane: true if the segment between the two
-// points is not blocked by any building. Used by the police "search" logic.
-export function hasLineOfSight(colliders, x1, z1, x2, z2) {
-  const steps = 24;
-  for (let i = 1; i < steps; i += 1) {
-    const t = i / steps;
-    if (pointInCollider(colliders, x1 + (x2 - x1) * t, z1 + (z2 - z1) * t)) return false;
+  // Docks: three tall cranes.
+  const craneSpots = [[-240, 90], [-190, 200], [-260, 220]];
+  for (const [cx, cz] of craneSpots) {
+    const crane = makeCrane();
+    crane.position.set(cx, 0, cz);
+    crane.rotation.y = range(rng, -0.6, 0.6);
+    group.add(crane);
   }
-  return true;
+
+  return { group, buildings, roads, districtAt, isOnRoad, randomRoadPoint, ground };
 }

@@ -1,154 +1,190 @@
-// Neon Bay 3D — low-poly model factories. Every vehicle and character is built
-// from boxes/cylinders in code: no external models, no textures beyond the city's.
-const T = window.THREE;
+// Mesh builders for every moving thing in Neon Bay 3D: cars, people, police,
+// helicopter, palms, containers, cranes and single buildings. All use the
+// global THREE (loaded as a classic script). Each builder returns a THREE.Group
+// with the parts later sessions need stored in userData.
+// Exports: makeCar, makePlayer, makePoliceCar, makeHelicopter, makePedestrian,
+// makeBuildingMesh, makePalm, makeContainer, makeCrane.
 
-const _box = new T.BoxGeometry(1, 1, 1);
-const _cyl = new T.CylinderGeometry(0.42, 0.42, 0.3, 10);
-const _sphere = new T.SphereGeometry(0.5, 8, 6);
-
-function mat(color, opts) {
-  return new T.MeshStandardMaterial(Object.assign({ color, roughness: 0.55, metalness: 0.25 }, opts || {}));
-}
-function box(parent, sx, sy, sz, x, y, z, material) {
-  const m = new T.Mesh(_box, material);
-  m.scale.set(sx, sy, sz); m.position.set(x, y, z);
-  m.castShadow = true; m.receiveShadow = true;
-  parent.add(m);
-  return m;
-}
-
-// A car: body + cabin + 4 wheels + headlights/taillights. Kinds change proportions.
-// Returns { group, wheels:[4 meshes], lights:{head:[], tail:[]}, lightBar (police) }
-export function makeCar(kind, color) {
-  const g = new T.Group();
-  const bodyMat = mat(color);
-  const glassMat = mat(0x1a2530, { roughness: 0.15, metalness: 0.6 });
-  const darkMat = mat(0x14161a, { roughness: 0.9 });
-  const dims = {
-    sedan: { l: 4.4, w: 2.0, h: 0.75, cabL: 2.2, cabH: 0.65, y: 0.55 },
-    sports: { l: 4.6, w: 2.0, h: 0.6, cabL: 2.0, cabH: 0.55, y: 0.5 },
-    taxi: { l: 4.4, w: 2.0, h: 0.75, cabL: 2.2, cabH: 0.65, y: 0.55 },
-    truck: { l: 6.2, w: 2.3, h: 1.0, cabL: 1.8, cabH: 0.9, y: 0.7 },
-    bus: { l: 7.5, w: 2.4, h: 1.5, cabL: 2.0, cabH: 0.8, y: 0.85 },
-    police: { l: 4.5, w: 2.0, h: 0.78, cabL: 2.2, cabH: 0.65, y: 0.55 },
-    swat: { l: 5.4, w: 2.3, h: 1.9, cabL: 0, cabH: 0, y: 1.0 },
-  }[kind] || { l: 4.4, w: 2.0, h: 0.75, cabL: 2.2, cabH: 0.65, y: 0.55 };
-  const { l, w, h, cabL, cabH, y } = dims;
-  box(g, l, h, w, 0, y, 0, bodyMat);
-  if (cabL > 0) box(g, cabL, cabH, w * 0.86, -l * 0.05, y + h / 2 + cabH / 2, 0, glassMat);
-  if (kind === 'bus') box(g, l * 0.8, 0.25, w * 0.5, 0, y + h + cabH + 0.1, 0, mat(0x2e6fc2, { emissive: 0x1a4a8a, emissiveIntensity: 0.6 })); // route sign
-  if (kind === 'sports') box(g, 1.2, 0.1, w * 0.9, -l / 2 + 0.2, y + h + 0.15, 0, darkMat); // spoiler
-  if (kind === 'taxi') {
-    box(g, 1.0, 0.35, 0.7, 0, y + h + cabH + 0.15, 0, mat(0xf2c200, { emissive: 0xaa8800, emissiveIntensity: 0.6 }));
+const matCache = new Map();
+function mat(color, emissive, intensity, transparent, opacity) {
+  const key = `${color}|${emissive || 0}|${intensity || 0}|${transparent ? 1 : 0}|${opacity || 0}`;
+  if (!matCache.has(key)) {
+    const m = new THREE.MeshStandardMaterial({ color });
+    if (emissive) {
+      m.emissive = new THREE.Color(emissive);
+      m.emissiveIntensity = intensity || 1;
+    }
+    if (transparent) {
+      m.transparent = true;
+      m.opacity = opacity;
+    }
+    matCache.set(key, m);
   }
-  if (kind === 'truck') {
-    box(g, l * 0.45, 0.5, w * 0.9, -l * 0.22, y + h + 0.25, 0, darkMat); // cargo bed walls
-  }
-  // Wheels.
-  const wheelMat = mat(0x111111, { roughness: 0.95 });
-  const wheels = [];
-  const wy = 0.42;
-  for (const [wx, wz] of [[l * 0.32, w / 2], [l * 0.32, -w / 2], [-l * 0.32, w / 2], [-l * 0.32, -w / 2]]) {
-    const wheel = new T.Mesh(_cyl, wheelMat);
-    wheel.rotation.x = Math.PI / 2;
-    wheel.position.set(wx, wy, wz);
-    wheel.castShadow = true;
-    g.add(wheel);
-    wheels.push(wheel);
-  }
-  // Headlights + taillights (emissive so they read at dusk).
-  const headMat = mat(0xfff6c0, { emissive: 0xffee88, emissiveIntensity: 1.4 });
-  const tailMat = mat(0xff2222, { emissive: 0xff2222, emissiveIntensity: 1.2 });
-  const heads = [], tails = [];
-  for (const wz of [w * 0.32, -w * 0.32]) {
-    heads.push(box(g, 0.15, 0.22, 0.4, l / 2, y + 0.1, wz, headMat));
-    tails.push(box(g, 0.15, 0.22, 0.4, -l / 2, y + 0.1, wz, tailMat));
-  }
-  let lightBar = null;
-  if (kind === 'police' || kind === 'swat') {
-    lightBar = new T.Group();
-    const red = box(lightBar, 0.5, 0.22, 0.5, 0, 0, 0.45, mat(0xff2222, { emissive: 0xff2222, emissiveIntensity: 2 }));
-    const blue = box(lightBar, 0.5, 0.22, 0.5, 0, 0, -0.45, mat(0x2244ff, { emissive: 0x2244ff, emissiveIntensity: 2 }));
-    lightBar.position.set(0, y + h + cabH + 0.15, 0);
-    lightBar.userData = { red, blue };
-    g.add(lightBar);
-    // Police livery: white doors.
-    box(g, l * 0.5, h * 0.7, w + 0.06, 0, y, 0, mat(0xf0f0f0, { roughness: 0.6 }));
-  }
-  // Brake lights: the tail material is exposed so the physics step can flare
-  // it when the car brakes or handbrakes.
-  return { group: g, wheels, heads, tails, tailMat, lightBar, bodyMat, length: l, width: w };
+  return matCache.get(key);
 }
 
-// A person: legs, torso, head, arms. userData holds limbs for walk animation.
-export function makeCharacter(shirt, pants, skin) {
-  const g = new T.Group();
-  const legL = box(g, 0.32, 0.8, 0.36, -0.2, 0.4, 0, mat(pants));
-  const legR = box(g, 0.32, 0.8, 0.36, 0.2, 0.4, 0, mat(pants));
-  const torso = box(g, 0.95, 0.9, 0.5, 0, 1.25, 0, mat(shirt));
-  const head = new T.Mesh(_sphere, mat(skin || 0xd8a080));
-  head.scale.set(0.85, 1, 0.85); head.position.set(0, 2.05, 0); head.castShadow = true;
-  g.add(head);
-  const armL = box(g, 0.26, 0.8, 0.3, -0.62, 1.25, 0, mat(shirt));
-  const armR = box(g, 0.26, 0.8, 0.3, 0.62, 1.25, 0, mat(shirt));
-  // A simple cap for the player / a hat for some peds.
-  const cap = box(g, 0.9, 0.18, 0.9, 0, 2.35, 0, mat(0x222831));
-  g.userData = { legL, legR, armL, armR, torso, head, cap };
-  return g;
+function box(w, h, d, color, x, y, z, emissive, intensity) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, emissive, intensity));
+  mesh.position.set(x || 0, y || 0, z || 0);
+  return mesh;
 }
 
-// Police helicopter: body, tail, main + tail rotors, searchlight.
-// Scaled up 15% and given a bright yellow side stripe + a blinking
-// anti-collision beacon so it reads clearly in the chase camera.
-export function makeHeli() {
-  const g = new T.Group();
-  const bodyMat = mat(0x1a1a22);
-  box(g, 3.2, 1.6, 1.8, 0, 0, 0, bodyMat);
-  box(g, 0.7, 0.7, 1.0, 0, 0.1, 1.35, mat(0x1a2530, { roughness: 0.15, metalness: 0.6 })); // nose glass
-  box(g, 3.4, 0.5, 0.5, 0, 0.2, -2.6, bodyMat); // tail boom
-  box(g, 0.3, 1.6, 1.2, 0, 0.6, -4.2, bodyMat); // tail fin
-  box(g, 3.3, 0.22, 1.84, 0, 0.35, 0, mat(0xffea00, { emissive: 0xaa8800, emissiveIntensity: 0.7 })); // yellow side stripe
-  const skids = mat(0x333333);
-  box(g, 2.6, 0.15, 0.15, 0, -1.1, 0.7, skids);
-  box(g, 2.6, 0.15, 0.15, 0, -1.1, -0.7, skids);
-  // Blinking anti-collision beacon on the roof.
-  const beaconMat = mat(0xff2222, { emissive: 0xff2222, emissiveIntensity: 2 });
-  const beacon = new T.Mesh(_sphere, beaconMat);
-  beacon.scale.setScalar(0.55); beacon.position.set(0, 1.05, 0);
-  g.add(beacon);
-  const rotor = new T.Group();
-  const bladeMat = mat(0x111111);
-  box(rotor, 7.5, 0.08, 0.5, 0, 0, 0, bladeMat);
-  box(rotor, 0.5, 0.08, 7.5, 0, 0, 0, bladeMat);
-  rotor.position.y = 1.1;
-  g.add(rotor);
-  const tailRotor = new T.Group();
-  box(tailRotor, 0.08, 2.2, 0.4, 0, 0, 0, bladeMat);
-  tailRotor.position.set(0.4, 0.6, -4.2);
-  g.add(tailRotor);
-  const spot = new T.SpotLight(0xfff2c0, 0, 90, 0.35, 0.4, 1.2);
-  spot.position.set(0, -0.8, 1.2);
-  g.add(spot);
-  const cone = new T.Mesh(
-    new T.ConeGeometry(6, 40, 16, 1, true),
-    new T.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.10, side: T.DoubleSide, depthWrite: false }),
+function wheel(x, z) {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.28, 10), mat(0x14141a));
+  mesh.rotation.z = Math.PI / 2;
+  mesh.position.set(x, 0.36, z);
+  return mesh;
+}
+
+export function makeCar(color, options) {
+  const opts = options || {};
+  const group = new THREE.Group();
+  const bodyColor = color === undefined ? 0xc23b5e : color;
+  group.add(box(1.9, 0.55, 4.2, bodyColor, 0, 0.62, 0));
+  group.add(box(1.7, 0.5, 2.1, 0x1a2030, 0, 1.12, -0.25));
+  group.add(box(1.92, 0.12, 0.9, 0x2a2a33, 0, 0.42, 1.7));
+  const wheels = [wheel(-0.88, 1.35), wheel(0.88, 1.35), wheel(-0.88, -1.35), wheel(0.88, -1.35)];
+  for (const w of wheels) group.add(w);
+  const headlights = [
+    box(0.34, 0.14, 0.08, 0xfff2c0, -0.62, 0.62, 2.12, 0xfff2c0, 2.2),
+    box(0.34, 0.14, 0.08, 0xfff2c0, 0.62, 0.62, 2.12, 0xfff2c0, 2.2),
+  ];
+  for (const h of headlights) group.add(h);
+  const brakeLights = [
+    box(0.4, 0.14, 0.08, 0x881111, -0.6, 0.66, -2.12, 0xff2222, 0.4),
+    box(0.4, 0.14, 0.08, 0x881111, 0.6, 0.66, -2.12, 0xff2222, 0.4),
+  ];
+  for (const b of brakeLights) group.add(b);
+  if (opts.spoiler) group.add(box(1.7, 0.08, 0.4, 0x14141a, 0, 1.05, -2.0));
+  group.userData = { wheels, brakeLights, headlights };
+  return group;
+}
+
+export function makePlayer() {
+  const group = new THREE.Group();
+  const body = new THREE.Group();
+  body.add(box(0.34, 0.62, 0.2, 0x2a2a33, -0.11, 0.36, 0));
+  body.add(box(0.34, 0.62, 0.2, 0x2a2a33, 0.11, 0.36, 0));
+  body.add(box(0.56, 0.72, 0.32, 0x3fae5a, 0, 1.05, 0));
+  body.add(box(0.16, 0.5, 0.16, 0xd9a06a, -0.38, 1.0, 0));
+  body.add(box(0.16, 0.5, 0.16, 0xd9a06a, 0.38, 1.0, 0));
+  const head = box(0.34, 0.34, 0.32, 0xe8b98a, 0, 1.6, 0);
+  body.add(head);
+  group.add(body);
+  group.userData = { body };
+  return group;
+}
+
+export function makePoliceCar() {
+  const group = makeCar(0xe8e8ec, {});
+  group.add(box(1.2, 0.1, 0.5, 0x14141a, 0, 1.42, -0.25));
+  const lightBar = new THREE.Group();
+  lightBar.add(box(0.5, 0.16, 0.34, 0xff2222, -0.32, 1.55, -0.25, 0xff2222, 2.0));
+  lightBar.add(box(0.5, 0.16, 0.34, 0x2266ff, 0.32, 1.55, -0.25, 0x2266ff, 2.0));
+  group.add(lightBar);
+  group.userData.lightBar = lightBar;
+  return group;
+}
+
+export function makeHelicopter() {
+  const group = new THREE.Group();
+  group.add(box(2.0, 1.3, 4.2, 0x223044, 0, 1.1, 0));
+  group.add(box(1.6, 0.8, 1.4, 0x2a3a52, 0, 1.0, 2.4));
+  const tail = box(0.5, 0.5, 3.6, 0x223044, 0, 1.3, -3.6);
+  group.add(tail);
+  group.add(box(0.2, 1.2, 0.9, 0x223044, 0, 1.8, -5.2));
+  const rotor = new THREE.Group();
+  rotor.add(box(0.5, 0.08, 9.0, 0x14141a, 0, 0, 0));
+  rotor.add(box(9.0, 0.08, 0.5, 0x14141a, 0, 0, 0));
+  rotor.position.set(0, 1.95, 0.2);
+  group.add(rotor);
+  group.add(box(0.08, 0.5, 0.08, 0x14141a, 0, 1.7, 0.2));
+  group.add(box(1.9, 0.08, 0.5, 0x14141a, -1.0, 0.35, 0.8));
+  group.add(box(1.9, 0.08, 0.5, 0x14141a, 1.0, 0.35, 0.8));
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(3.2, 12, 12, 1, true),
+    mat(0xfff2c0, 0xfff2c0, 0.8, true, 0.22),
   );
-  cone.rotation.x = Math.PI; // apex up at the heli
-  cone.position.y = -21;
-  g.add(cone);
-  g.scale.setScalar(1.15);
-  g.userData = { rotor, tailRotor, spot, cone, beacon, beaconMat };
-  return g;
+  cone.position.set(0, -5.0, 1.5);
+  cone.rotation.x = Math.PI;
+  group.add(cone);
+  group.userData = { rotor, searchlight: cone };
+  return group;
 }
 
-// A cash drop: green glowing bundle.
-export function makeCashDrop() {
-  const g = new T.Group();
-  const bundle = box(g, 0.9, 0.5, 0.6, 0, 0.5, 0, mat(0x2ea86a, { emissive: 0x1a6a3a, emissiveIntensity: 0.8 }));
-  const band = box(g, 0.95, 0.15, 0.65, 0, 0.5, 0, mat(0xffd76a, { emissive: 0xaa8800, emissiveIntensity: 0.8 }));
-  const glow = new T.Mesh(_sphere, new T.MeshBasicMaterial({ color: 0x7dff9a, transparent: true, opacity: 0.25 }));
-  glow.scale.setScalar(2.4); glow.position.y = 0.6;
-  g.add(glow);
-  g.userData = { bundle, band, glow };
-  return g;
+export function makePedestrian(color) {
+  const group = new THREE.Group();
+  const body = new THREE.Group();
+  const shirt = color === undefined ? 0x7a6ab8 : color;
+  body.add(box(0.3, 0.5, 0.16, 0x2a2a33, -0.09, 0.28, 0));
+  body.add(box(0.3, 0.5, 0.16, 0x2a2a33, 0.09, 0.28, 0));
+  body.add(box(0.48, 0.6, 0.26, shirt, 0, 0.85, 0));
+  body.add(box(0.3, 0.3, 0.28, 0xe8b98a, 0, 1.32, 0));
+  group.add(body);
+  group.userData = { body };
+  return group;
+}
+
+export function makeBuildingMesh(w, d, h, color, options) {
+  const group = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+  base.position.y = h / 2;
+  group.add(base);
+  if (options && options.pitched) {
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.72, h * 0.18 + 1.2, 4), mat(0x2a2a33));
+    roof.position.y = h + (h * 0.18 + 1.2) / 2;
+    roof.rotation.y = Math.PI / 4;
+    group.add(roof);
+  } else {
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(w * 1.02, 0.35, d * 1.02), mat(0x23232e));
+    slab.position.y = h + 0.17;
+    group.add(slab);
+  }
+  group.userData = { w, d, h };
+  return group;
+}
+
+export function makePalm() {
+  const group = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 3.4, 6), mat(0x6a4a2a));
+  trunk.position.y = 1.7;
+  trunk.rotation.z = 0.08;
+  group.add(trunk);
+  for (let i = 0; i < 5; i += 1) {
+    const frond = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2.2, 4), mat(0x2e8a4a));
+    const angle = (i / 5) * Math.PI * 2;
+    frond.position.set(Math.cos(angle) * 0.9, 3.6, Math.sin(angle) * 0.9);
+    frond.rotation.z = Math.cos(angle) * 1.1;
+    frond.rotation.x = -Math.sin(angle) * 1.1;
+    group.add(frond);
+  }
+  return group;
+}
+
+export function makeContainer(color) {
+  const group = new THREE.Group();
+  const shade = color === undefined ? 0xc23b2e : color;
+  group.add(box(6, 2.6, 2.6, shade, 0, 0, 0));
+  for (let i = -1; i <= 1; i += 1) {
+    group.add(box(0.12, 2.6, 2.66, 0x000000, i * 1.8, 0, 0));
+  }
+  return group;
+}
+
+export function makeCrane() {
+  const group = new THREE.Group();
+  const legMat = 0xd9a03e;
+  const positions = [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]];
+  for (const [x, z] of positions) {
+    group.add(box(0.5, 18, 0.5, legMat, x, 9, z));
+  }
+  group.add(box(5.4, 0.6, 5.4, legMat, 0, 18.3, 0));
+  group.add(box(1.0, 1.0, 22, legMat, 0, 19.4, 6));
+  group.add(box(1.0, 1.0, 6, legMat, 0, 19.4, -6));
+  group.add(box(1.4, 1.2, 1.4, 0x2a2a33, 0, 19.4, -5));
+  const line = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 9, 5), mat(0x14141a));
+  line.position.set(0, 14.5, 14);
+  group.add(line);
+  group.add(box(1.2, 1.0, 1.2, 0xc23b2e, 0, 9.5, 14));
+  return group;
 }

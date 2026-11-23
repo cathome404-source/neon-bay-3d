@@ -1,117 +1,76 @@
-// Neon Bay 3D — screenshot scenes behind ?shot=cover|drive|chase|mission.
-// Each one stages a real game state (cars, police, heli, mission) and then lets
-// the simulation run a few seconds with a scripted driver, so the frame is what
-// a short game really looks like. Same seed, same frame.
-import { MISSIONS } from './config.js';
-import { Car } from './vehicles.js';
+// Screenshot staging for Neon Bay 3D: fixed, reproducible scenes for the
+// four dossier images — city cover, fast drive, helicopter chase, and a
+// mission moment. Exports: createShots, SHOT_NAMES.
 
-// Drive forward, steering toward a waypoint. Returns {throttle, steer, handbrake}.
-// Stops (handbrake) once close to the waypoint, so the car never overshoots it.
-// laneX: if given, the car first steers back to that road/bridge centerline when
-// it has been shoved off it (police rams), so bridge shots stay on the bridge.
-// maxSpeed (m/s): cap so the scripted steering can hold a lane at low fps.
-function driveAutopilot(G, tx, tz, laneX, maxSpeed) {
-  const car = G.player.inCar;
-  if (!car) return { throttle: 0, steer: 0, handbrake: false };
-  let ax = tx, az = tz;
-  if (laneX !== undefined && Math.abs(car.x - laneX) > 4) {
-    ax = laneX;
-    az = car.z + 25 * Math.sign(tz - car.z);
-  }
-  const dx = ax - car.x, dz = az - car.z;
-  if (dx * dx + dz * dz < 144) return { throttle: 0, steer: 0, handbrake: true };
-  const desired = Math.atan2(dz, dx);
-  let d = desired - car.heading;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  // Cap the speed so the slow scripted steering can hold a lane (at high
-  // speed a police ram shoves the car off the bridge deck).
-  const cap = maxSpeed !== undefined ? maxSpeed : 28;
-  const throttle = car.speed > cap ? 0 : 1;
-  return { throttle, steer: Math.max(-1, Math.min(1, d * 1.8)), handbrake: false };
+export const SHOT_NAMES = ['cover', 'drive', 'chase', 'mission'];
+
+function putPlayerInCar(actors, vehicle, x, z, heading) {
+  const player = actors.player;
+  vehicle.mesh.position.set(x, 0, z);
+  vehicle.heading = heading;
+  vehicle.mesh.rotation.y = heading;
+  vehicle.speed = 0;
+  player.car = vehicle;
+  player.onFoot = false;
+  player.mesh.visible = false;
+  player.heading = heading;
+  player.pos.set(x, 0, z);
 }
 
-// Put the player in a car, keeping Player.inCar and Game.playerCar in sync.
-function putPlayerInCar(G, car) {
-  const li = G.looseCars.indexOf(car);
-  if (li >= 0) G.looseCars.splice(li, 1);
-  G.player.inCar = car;
-  G.playerCar = car;
-  G.ctx.playerCar = car;
-  G.player.x = car.x;
-  G.player.z = car.z;
+function putPlayerOnFoot(actors, x, z, heading) {
+  const player = actors.player;
+  player.pos.set(x, 0, z);
+  player.heading = heading;
+  player.mesh.rotation.y = heading;
+  player.mesh.visible = true;
+  player.onFoot = true;
+  player.car = null;
 }
 
-export function setupShot(name, G) {
-  const P = G.player;
-  const M = G.missions;
-  G.renderer.setDusk(0);
-  if (name === 'drive') {
-    // On foot at the south beach, city behind, mission 3 active.
-    P.x = 0; P.z = 300; P.heading = -Math.PI / 2; // facing north, toward the city
-    P.inCar = null;
-    G.playerCar = null;
-    M.start(2, G.ctx);
-    G.renderer.setDusk(0.15);
-    G.camYaw = -Math.PI / 2; // camera behind the player, looking north at the city
-    return { autopilot: null, settleFrames: 180 };
-  }
-  if (name === 'chase') {
-    // Speeding north across the causeway bridge, 3 stars, heli + police + roadblock, dusk.
-    // Starts just before the bridge and drives slowly (60 km/h) so the
-    // scripted steering holds the 16m-wide deck against police rams.
-    G.renderer.setDusk(0.7);
-    const car = G.spawnPlayerCar('sports', 0xe86a20, -35, -230, -Math.PI / 2);
-    putPlayerInCar(G, car);
-    G.police.setWanted(3, 'shot setup');
-    G.police.spawnHeli(P);
-    // Place the helicopter straight into its hover spot (ahead + to the
-    // side, low) instead of letting it lerp in from its spawn point behind
-    // the car — the old staging left the body out of frame and only the
-    // searchlight cone showed. The chase camera also aims ahead and level
-    // (aimAhead/aimY) instead of down at the car, so the sky ahead — where
-    // the heli flies — is inside the 62 deg FOV.
-    if (G.police.heli) {
-      const h = G.police.heli;
-      h.hoverY = 22;
-      const hd = car.heading;
-      h.x = car.x + Math.cos(hd) * 32 - Math.sin(hd) * 10;
-      h.z = car.z + Math.sin(hd) * 32 + Math.cos(hd) * 10;
-      h.y = 22;
-      h.group.position.set(h.x, h.y, h.z);
+export function createShots(renderer, actors, missions, world) {
+  function applyShot(name) {
+    const downtown = { x: -120, z: -120 };
+    if (name === 'cover') {
+      // Wide dusk view over Downtown: the player stands on a road at the
+      // district edge while the towers and neon fill the frame.
+      putPlayerOnFoot(actors, -60, -60, Math.PI * 0.75);
+      renderer.setShot('cover');
+      return true;
     }
-    G.renderer.aimAhead = 25;
-    G.renderer.aimY = 4;
-    for (let i = 0; i < 2; i += 1) G.police.spawnPursuit(P, i === 1);
-    G.police.spawnRoadblock({ x: -35, z: -295 }, -Math.PI / 2);
-    // The roadblock sits 10m PAST the autopilot stop point, so the car
-    // halts on the bridge with the roadblock visible ahead instead of
-    // swerving around it and off the deck.
-    M.start(4, G.ctx);
-    // Longer settle (210 frames) so the heli, the pursuit cars and the
-    // roadblock are all staged before the screenshot is taken.
-    return { autopilot: () => driveAutopilot(G, -35, -285, -35, 17), settleFrames: 210 };
+    if (name === 'drive') {
+      // The player drives a parked car along a Downtown road at speed.
+      const car = actors.parkedCars[0];
+      putPlayerInCar(actors, car, -120, -60, 0);
+      car.speed = 24;
+      renderer.setShot('drive');
+      return true;
+    }
+    if (name === 'chase') {
+      // Three stars: the helicopter rises and hovers ahead of the player,
+      // and the camera aims high enough to keep it in frame.
+      const car = actors.parkedCars[0];
+      putPlayerInCar(actors, car, -120, 0, 0);
+      car.speed = 20;
+      actors.setWanted(3);
+      renderer.setShot('chase');
+      return true;
+    }
+    if (name === 'mission') {
+      // Mission one is live and the player stands near its first target.
+      if (missions.index < 0) missions.startNext();
+      const marker = missions.currentMarker();
+      if (marker) {
+        putPlayerOnFoot(actors, marker.x + 10, marker.z + 8, Math.atan2(
+          marker.x - (marker.x + 10), marker.z - (marker.z + 8),
+        ));
+      } else {
+        putPlayerOnFoot(actors, downtown.x, downtown.z, 0);
+      }
+      renderer.setShot('mission');
+      return true;
+    }
+    return false;
   }
-  if (name === 'mission') {
-    // Bank Job in progress downtown: rivals at the bank, cash drops, 2 stars.
-    const car = G.spawnPlayerCar('sedan', 0x2e6fc2, 60, 60, -Math.PI / 2);
-    putPlayerInCar(G, car);
-    M.start(7, G.ctx);
-    // Advance to the takedown step: complete goto by teleporting close.
-    G.police.setWanted(2, 'bank alarm');
-    G.police.spawnPursuit(P, false);
-    G.police.spawnPursuit(P, false);
-    return { autopilot: () => driveAutopilot(G, 35, 35), settleFrames: 180 };
-  }
-  // cover (default): downtown, sports car, 2 stars, 3 police, mission 1 active.
-  const car = G.spawnPlayerCar('sports', 0xe86a20, 35, 80, -Math.PI / 2);
-  putPlayerInCar(G, car);
-  G.police.setWanted(2, 'shot setup');
-  // Two parked units angled across the road ahead (roadblock look, player drives
-  // between them) + one normal pursuer closing from behind.
-  G.police.spawnAt(41, -270, P, false, { heading: -Math.PI / 2 + 0.5, speed: 0, hold: true });
-  G.police.spawnAt(29, -285, P, false, { heading: -Math.PI / 2 - 0.5, speed: 0, hold: true });
-  G.police.spawnAt(105, -180, P, false); // flanking pursuer from the east
-  M.start(0, G.ctx);
-  return { autopilot: () => driveAutopilot(G, 35, -245, 35), settleFrames: 180 };
+
+  return { applyShot };
 }
