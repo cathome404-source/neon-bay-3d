@@ -1,6 +1,7 @@
-// The 3D renderer for Neon Bay 3D: dusk-to-night lighting, a chase camera
-// that aims ahead of the player, car headlights, shadows, and named
-// screenshot framings. Exports: createRenderer.
+// The 3D renderer for Neon Bay 3D: lighting that slides from dusk into night,
+// a chase camera that aims ahead of the player so chases stay in frame,
+// car headlights, soft shadows, and the named framings used for screenshots.
+// Exports: createRenderer.
 
 import { TUNING, DISTRICTS } from './config.js';
 
