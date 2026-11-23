@@ -1,6 +1,6 @@
-// The living city for Neon Bay 3D: the player on foot and behind the wheel,
-// police cars that patrol, chase and ram, a search helicopter, wandering
-// pedestrians, and the wanted system that ties them together.
+// The living city of Neon Bay 3D: Rex on foot and behind the wheel, police
+// cars that patrol, chase and ram, a searchlight helicopter overhead,
+// wandering pedestrians — all bound together by the wanted-star system.
 // Exports: createActors.
 
 import { TUNING } from './config.js';
