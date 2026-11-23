@@ -50,6 +50,10 @@
   .panel .stats { color: #7dff9a; font-weight: 700; }
   .panel .buttons { display: flex; gap: 12px; justify-content: center; margin-top: 18px; }
   .panel .foot { font-size: 12px; color: #999; margin-top: 16px; }
+  /* Low-health vignette: a red edge glow, driven by the HUD (opacity 0-1). */
+  .vignette { position: fixed; inset: 0; pointer-events: none; z-index: 6;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(200,0,0,.55) 100%);
+    opacity: 0; transition: opacity .3s; }
 </style>
 </head>
 <body>
