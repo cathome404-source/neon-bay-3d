@@ -6,50 +6,62 @@
 
 Built for the [Make GTA 6 bounty](https://make.fun/bounty/gta6-01) on [make.fun](https://make.fun).
 
-An original 3D open-world crime game in the browser, built with three.js for the make.fun GTA 6 bounty. No Rockstar material — every street, character and line is original.
-
-You are **Rex Marlowe**, a driver-for-hire in the coastal city of **Neon Bay**. Take jobs from Vic at the garage and Lena the fixer, earn cash and respect, and stay ahead of the police as the day fades from golden afternoon into neon night.
+A browser game that drops you into a living 3D crime sandbox, rendered with three.js. Nothing here comes from Rockstar — the streets, the people, the dialogue and the story are all made up for this game. You are **Rex Marlowe**, a wheelman for hire in the seaside city of **Neon Bay**. Run jobs for Vic and Lena, stack cash and respect, and keep the law off your back while the sun sinks and the neon comes on.
 
 ## The city
 
-Four districts across a 600×600-unit road grid:
+Neon Bay sits on a 600×600-unit grid of roads, cut into four districts:
 
-- **Downtown** — tall glass towers, neon signs, rooftop beacons.
-- **Beachfront** — low hotels, palm rows and a sandy shore.
-- **Docks** — warehouses, stacked shipping containers and cranes.
-- **The Hills** — houses on gentle slopes with winding streets.
+- **Downtown** — glass towers, glowing signs and rooftop beacons.
+- **Beachfront** — low hotels, palm rows and a sandy shoreline.
+- **Docks** — warehouses, cranes and towers of shipping containers.
+- **The Hills** — houses climbing gentle slopes on twisty streets.
 
-## What is in the game
+Cars flow along the roads, pedestrians use the sidewalks, and the sky shifts from golden afternoon to deep night as you play.
 
-- **10 story missions** — pickups, chases, races, rescues and one big score, with dialogue from Vic and Lena.
-- **Police wanted system, 0–5 stars** — patrol cars chase you, interceptors ram from 3 stars, a searchlight helicopter circles from 3 stars, roadblocks appear at 4 stars, SWAT at 5. Break line of sight and the heat cools off.
-- **4 weapon tiers** — Fists, Pistol, Shotgun and SMG, switched with a weapon wheel (keys 1–4 or Tab).
-- **Garage** — engine and armor upgrades, fresh paint and repairs.
-- **Respect rank** — Vic repairs your car for free at respect 15; Lena spots for you at respect 40.
-- **Radio** — three WebAudio stations (Neon FM, Bay Chill, Night Drive), switched with M.
-- **Ambient cash drops**, traffic, pedestrians, save/load via localStorage.
+## What you can do
+
+- **10 story missions** — First Pickup, Hot Wheels, Cash Run, Shake the Tail, Bridge Sprint, Rival Crew, Rescue Lena, Bank Job, Turf War and The Big Score. Vic at the garage and Lena the fixer talk you through each job, and finishing one pays cash and respect.
+- **Wanted level, 0–5 stars** — patrol cars give chase, interceptors try to ram you off the road, and at 3 stars a helicopter with a searchlight joins the hunt. Slip out of sight and the heat fades.
+- **4 weapon tiers** — Fists, Pistol, Shotgun and SMG, picked from the weapon wheel.
+- **Vic's garage** — patch up your car, bolt on a stronger engine, add armor, or give it a new paint job. Once your respect hits 15 the repairs are on the house, and at respect 40 Lena starts watching your back.
+- **Money and respect** — jobs pay $250–$900, and stray cash drops are hidden around town.
+- **Radio** — three WebAudio stations (Neon FM, Bay Chill, Night Drive), flipped with M.
+- **Save/load** — your progress lives in localStorage, so a session picks up where the last one ended.
 
 ## Controls
 
-WASD move / drive · Shift sprint / boost · Space brake / handbrake · E enter or exit a car · F punch · mouse aim, click shoot · 1–4 / Tab weapon wheel · P pause · M radio station.
+- **WASD** — walk / drive
+- **Shift** — sprint / boost
+- **Space** — brake / handbrake
+- **E** — get in or out of a car
+- **F** or **click** — punch / shoot (mouse aims)
+- **1–4** or **Tab** — weapon wheel
+- **M** — next radio station
+- **G** — repair at Vic's garage when you are close to it
+- **P** — pause
 
-## Run it locally
+## How to run
+
+Serve the folder and open `game/index.html`:
 
 ```sh
-node serve.ts
+npx serve
+# or
+python3 -m http.server
 ```
 
-Then open http://localhost:8080 in a browser.
+`node main.ts` builds the dossier: it copies `game/` and `screenshots/` into the output folder and writes `dossier.json`.
 
-## Build
+## Screenshots
 
-`main.ts` (Node, standard library only) copies `game/` and `screenshots/` into the output directory and writes `dossier.json` through the kit's `buildDossier`.
+Four staged shots are in `screenshots/` — `1-cover.jpg` (the city at dusk), `2-drive.jpg` (a fast drive), `3-chase.jpg` (the helicopter on your tail) and `4-mission.jpg` (out on a job).
 
-## Structure
+## Layout
 
 - `game/index.html` — page shell and HUD
 - `game/vendor/three.min.js` — three.js r149, vendored locally (no CDN)
-- `game/src/config.js` — every tuning number and district
+- `game/src/config.js` — tuning numbers and districts
 - `game/src/random.js` — seeded random helpers
 - `game/src/input.js` — keyboard and mouse input
 - `game/src/world.js` — city generation
@@ -59,6 +71,6 @@ Then open http://localhost:8080 in a browser.
 - `game/src/missions.js` — the ten story missions
 - `game/src/audio.js` — radio and sound effects
 - `game/src/hud.js` — HUD, minimap and dialogue
-- `game/src/render.js` — camera, lighting and the chase shot
+- `game/src/render.js` — camera, lighting and chase framing
 - `game/src/shots.js` — screenshot scenes
 - `game/src/main.js` — boot and the game loop
