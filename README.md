@@ -1,5 +1,11 @@
 # Neon Bay 3D
 
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/cathome404-source/neon-bay-3d/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/cathome404-source/neon-bay-3d/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+
+Built for the [Make GTA 6 bounty](https://make.fun/bounty/gta6-01) on [make.fun](https://make.fun).
+
 An original 3D open-world crime game in the browser, built with three.js for the make.fun GTA 6 bounty. No Rockstar material — every street, character and line is original.
 
 You are **Rex Marlowe**, a driver-for-hire in the coastal city of **Neon Bay**. Take jobs from Vic at the garage and Lena the fixer, earn cash and respect, and stay ahead of the police as the day fades from golden afternoon into neon night.
